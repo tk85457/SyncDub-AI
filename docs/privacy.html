@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — SyncDub AI Live Video Translator</title>
+  <meta name="description" content="Official Privacy Policy for SyncDub AI: Live Video Translator & Real-Time Dubbing App (com.syncdub.livedub). Learn how we protect your privacy with our zero audio retention guarantee.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-surface: #111827;
+      --bg-card: #1f2937;
+      --border-color: #374151;
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --emerald-accent: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.15);
+      --blue-accent: #38bdf8;
+      --blue-glow: rgba(56, 189, 248, 0.15);
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      padding: 0;
+      margin: 0;
+    }
+
+    /* Top Navigation Header */
+    .nav-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(11, 15, 25, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #10b981, #0284c7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: white;
+      box-shadow: 0 0 16px var(--emerald-glow);
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-badge {
+      font-size: 11px;
+      background: var(--emerald-glow);
+      color: var(--emerald-accent);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-weight: 600;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      margin-left: 20px;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--emerald-accent);
+    }
+
+    /* Hero Banner */
+    .hero {
+      max-width: 900px;
+      margin: 40px auto 30px;
+      padding: 0 24px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--emerald-glow);
+      color: var(--emerald-accent);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+      background: linear-gradient(180deg, #ffffff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      max-width: 650px;
+      margin: 0 auto 20px;
+    }
+
+    .metadata-bar {
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      padding: 10px 20px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .metadata-bar span strong {
+      color: var(--text-primary);
+    }
+
+    /* Main Content Container */
+    .container {
+      max-width: 900px;
+      margin: 0 auto 60px;
+      padding: 0 24px;
+    }
+
+    /* Quick Highlight Callout */
+    .highlight-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(56, 189, 248, 0.05));
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 36px;
+    }
+
+    .highlight-card h3 {
+      font-size: 16px;
+      color: var(--emerald-accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .highlight-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Section Styling */
+    section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    section h2 .section-num {
+      background: var(--bg-card);
+      color: var(--emerald-accent);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    section h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--blue-accent);
+      margin: 20px 0 8px;
+    }
+
+    section p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+      line-height: 1.65;
+    }
+
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 16px;
+    }
+
+    li {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    li strong {
+      color: var(--text-primary);
+    }
+
+    /* Tables */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 18px 0;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 12px 16px;
+      color: var(--text-secondary);
+      border-bottom: 1px solid rgba(55, 65, 81, 0.5);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .badge-tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--blue-accent);
+      border-radius: 4px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    /* Contact Box */
+    .contact-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .contact-card a {
+      color: var(--emerald-accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .contact-card a:hover {
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      padding: 32px 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    footer a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--emerald-accent);
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 28px; }
+      section { padding: 20px; }
+      .nav-bar { padding: 14px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <nav class="nav-bar">
+    <a href="#" class="brand">
+      <div class="brand-icon">S</div>
+      <div>
+        <div class="brand-title">SyncDub AI</div>
+      </div>
+      <span class="brand-badge">Official Policy</span>
+    </a>
+    <div class="nav-links">
+      <a href="#audio-retention">Audio Retention</a>
+      <a href="#permissions">Permissions</a>
+      <a href="#deletion">Data Deletion</a>
+      <a href="#contact">Contact</a>
+    </div>
+  </nav>
+
+  <!-- Hero Header -->
+  <header class="hero">
+    <div class="hero-badge">🔒 Privacy by Design Guarantee</div>
+    <h1>Privacy Policy</h1>
+    <p>We believe live translation should be immediate, secure, and ephemeral. Read how SyncDub AI protects your personal information and audio streams.</p>
+    
+    <div class="metadata-bar">
+      <span><strong>Application:</strong> SyncDub AI — Live Video Translator</span>
+      <span><strong>Package:</strong> <code>com.syncdub.livedub</code></span>
+      <span><strong>Effective Date:</strong> September 14, 2026</span>
+      <span><strong>Jurisdiction:</strong> Global (GDPR / CCPA / Google Play Compliant)</span>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Zero Audio Retention Callout -->
+    <div class="highlight-card" id="audio-retention">
+      <h3>🛡️ Our Zero Audio Retention Promise</h3>
+      <p>
+        <strong>SyncDub AI never records, archives, stores, or sells your audio.</strong> Whether capturing video playback audio via Android MediaProjection or loopback microphone audio, incoming sound chunks are converted in volatile memory (RAM) exclusively to generate real-time live translated speech and are discarded instantaneously. Your conversations and videos remain 100% private to you.
+      </p>
+    </div>
+
+    <!-- Section 1: Introduction -->
+    <section>
+      <h2><span class="section-num">01</span> Introduction & Overview</h2>
+      <p>
+        SyncDub AI ("we", "our", or "us") provides a real-time, low-latency neural speech translation and dubbing application available on the Google Play Store (Package ID: <code>com.syncdub.livedub</code>). This Privacy Policy governs your use of the SyncDub AI mobile application and describes how we collect, process, and safeguard information.
+      </p>
+      <p>
+        By downloading, installing, or using SyncDub AI, you acknowledge and agree to the practices outlined in this Privacy Policy. If you do not agree with any terms herein, please refrain from using our services.
+      </p>
+    </section>
+
+    <!-- Section 2: Information We Collect -->
+    <section>
+      <h2><span class="section-num">02</span> Information We Collect & How We Use It</h2>
+      
+      <h3>A. Real-Time Audio Data (Ephemeral Processing Only)</h3>
+      <p>
+        To perform live dubbing of playing videos or spoken speech, SyncDub AI captures audio streams using:
+      </p>
+      <ul>
+        <li><strong>Microphone Input (<code>RECORD_AUDIO</code>):</strong> Captures spoken speech or speaker playback when physical microphone mode is active.</li>
+        <li><strong>Internal Playback Audio Capture (Android 10+ <code>MediaProjection</code>):</strong> With your explicit one-time system confirmation, captures the internal digital audio of media playing on your phone (e.g., YouTube, social video apps) directly without room noise.</li>
+      </ul>
+      <p>
+        <strong>Processing Pipeline:</strong> Captured 16kHz PCM audio buffers are streamed via encrypted TLS 1.3 WebSockets directly to the neural speech synthesis engine. Once translation is streamed back, the audio chunk is immediately purged from RAM. Audio is <em>never written to disk, stored on servers, or used for model re-training</em>.
+      </p>
+
+      <h3>B. Account & Authentication Data</h3>
+      <p>
+        When you authenticate using <strong>Google Sign-In</strong>, we receive standard OAuth 2.0 public identity tokens managed securely through <strong>Supabase Auth</strong>:
+      </p>
+      <ul>
+        <li>Your Name and Email Address (for identification and account recovery).</li>
+        <li>Profile picture URL (optional display on your in-app profile card).</li>
+        <li>Unique Supabase user identifier (UUID).</li>
+      </ul>
+      <p>We do not access your Google passwords, contacts, Google Drive files, or any unrelated account permissions.</p>
+
+      <h3>C. Subscription & Quota Usage</h3>
+      <p>
+        To manage your free trial minutes (e.g., 45 minutes Starter) or paid Pro/Studio quotas (e.g., 3,000 to 10,000 minutes), we store your active plan tier and remaining translation minutes balance securely in your Supabase user profile.
+      </p>
+
+      <h3>D. Local Device Preferences</h3>
+      <p>
+        SyncDub AI stores user settings locally on your device via <code>SharedPreferences</code>:
+      </p>
+      <ul>
+        <li>Target translation language selection (e.g., Hindi, Spanish, French, Japanese).</li>
+        <li>Preferred audio capture mode (Internal Video Capture vs. Microphone Loopback).</li>
+        <li>Floating dubbing icon preferences (docking position, overlay size, dubbed subtitles toggle).</li>
+        <li>UI theme mode (Light Mode / Dark Mode).</li>
+      </ul>
+    </section>
+
+    <!-- Section 3: Android Device Permissions -->
+    <section id="permissions">
+      <h2><span class="section-num">03</span> Android Permissions & Justification</h2>
+      <p>
+        SyncDub AI requests only permissions strictly necessary for its core live dubbing functionality:
+      </p>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Permission</th>
+              <th>Category</th>
+              <th>Required Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>RECORD_AUDIO</code></td>
+              <td><span class="badge-tag">Audio</span></td>
+              <td>Required to capture audio stream for real-time translation.</td>
+            </tr>
+            <tr>
+              <td><code>FOREGROUND_SERVICE</code><br><code>FOREGROUND_SERVICE_MICROPHONE</code><br><code>FOREGROUND_SERVICE_MEDIA_PLAYBACK</code></td>
+              <td><span class="badge-tag">Background</span></td>
+              <td>Ensures live dubbing and translated audio playback continue uninterrupted when watching video apps in full screen.</td>
+            </tr>
+            <tr>
+              <td><code>SYSTEM_ALERT_WINDOW</code></td>
+              <td><span class="badge-tag">Overlay</span></td>
+              <td>Draws the floating dub controller and live subtitles over external video apps (YouTube, Reels, Netflix).</td>
+            </tr>
+            <tr>
+              <td><code>MEDIA_PROJECTION</code></td>
+              <td><span class="badge-tag">System Capture</span></td>
+              <td>Optional, user-consented digital capture of video audio playback on Android 10+ devices.</td>
+            </tr>
+            <tr>
+              <td><code>INTERNET</code> & <code>ACCESS_NETWORK_STATE</code></td>
+              <td><span class="badge-tag">Network</span></td>
+              <td>Communicates securely over TLS 1.3 with the AI translation proxy node.</td>
+            </tr>
+            <tr>
+              <td><code>MODIFY_AUDIO_SETTINGS</code></td>
+              <td><span class="badge-tag">Hardware Routing</span></td>
+              <td>Allows user to route dubbed audio output to phone speaker, wired earphones, or Bluetooth earbuds.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 4: Third-Party Service Providers -->
+    <section>
+      <h2><span class="section-num">04</span> Third-Party Service Providers</h2>
+      <p>We work exclusively with industry-leading, privacy-compliant infrastructure providers:</p>
+      <ul>
+        <li><strong>Google Play Services:</strong> Used for secure authentication (Google Identity Services) and in-app purchase billing management.</li>
+        <li><strong>Supabase Inc:</strong> Enterprise-grade PostgreSQL authentication and database hosting with end-to-end data encryption at rest (AES-256) and in transit (SSL/TLS 1.3).</li>
+        <li><strong>Google Gemini AI Live Translate API:</strong> Low-latency neural translation backend processing ephemeral audio streams under strict enterprise data protection agreements.</li>
+      </ul>
+      <p>No third-party advertising SDKs or tracking pixels are included in SyncDub AI.</p>
+    </section>
+
+    <!-- Section 5: Data Retention & Account Deletion -->
+    <section id="deletion">
+      <h2><span class="section-num">05</span> Data Retention & Your Deletion Rights</h2>
+      <p>
+        In compliance with Google Play Developer Policies and global privacy regulations (GDPR, CCPA):
+      </p>
+      <ul>
+        <li><strong>Audio Data:</strong> Purged immediately upon playback completion (0-second persistence).</li>
+        <li><strong>Session History:</strong> Stored locally on your device only. You can delete individual sessions or tap "Clear All History" at any time from the in-app History screen.</li>
+        <li><strong>Account Deletion:</strong> You have the absolute right to delete your account and all associated profile data at any time.</li>
+      </ul>
+
+      <div class="contact-card">
+        <strong>How to Request Account & Data Deletion:</strong>
+        <p>You can request immediate deletion of your Supabase profile and credentials by sending an email with your registered Google account address to:</p>
+        <p><a href="mailto:tk8545725@gmail.com?subject=SyncDub%20Account%20Deletion%20Request">tk8545725@gmail.com</a></p>
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">All associated profile records, session identifiers, and quota metrics will be purged within 48 business hours.</p>
+      </div>
+    </section>
+
+    <!-- Section 6: Children's Privacy -->
+    <section>
+      <h2><span class="section-num">06</span> Children's Privacy (COPPA Compliance)</h2>
+      <p>
+        SyncDub AI is not directed to children under the age of 13. We do not knowingly collect personal identifiable information from children under 13. If you become aware that a child has provided us with personal information, please contact us immediately, and we will promptly delete such information.
+      </p>
+    </section>
+
+    <!-- Section 7: Security Measures -->
+    <section>
+      <h2><span class="section-num">07</span> Data Security</h2>
+      <p>
+        We implement robust administrative, technical, and physical security safeguards to protect your information:
+      </p>
+      <ul>
+        <li>All communications between the SyncDub AI mobile app and our backend use TLS 1.3 encryption.</li>
+        <li>User authentication uses cryptographically secure JSON Web Tokens (JWT) with PKCE OAuth 2.0.</li>
+        <li>Audio buffers are isolated in memory and never written to permanent disk storage.</li>
+      </ul>
+    </section>
+
+    <!-- Section 8: Changes to Privacy Policy -->
+    <section>
+      <h2><span class="section-num">08</span> Changes to This Privacy Policy</h2>
+      <p>
+        We may update our Privacy Policy periodically. We will notify you of any significant modifications by updating the "Effective Date" at the top of this document and publishing the updated policy on this official GitHub Pages portal.
+      </p>
+    </section>
+
+    <!-- Section 9: Contact Us -->
+    <section id="contact">
+      <h2><span class="section-num">09</span> Contact Information & Developer Support</h2>
+      <p>
+        If you have any questions, concerns, or requests regarding this Privacy Policy or your data, please contact the developer:
+      </p>
+      <div class="contact-card">
+        <p><strong>App Developer:</strong> Taha Imam (SyncDub AI)</p>
+        <p><strong>Contact Email:</strong> <a href="mailto:tk8545725@gmail.com">tk8545725@gmail.com</a></p>
+        <p><strong>Application:</strong> SyncDub AI — Live Video Translator</p>
+        <p><strong>Google Play Application ID:</strong> <code>com.syncdub.livedub</code></p>
+        <p><strong>GitHub Repository:</strong> <a href="https://github.com/tk85457/SyncDub-AI" target="_blank">https://github.com/tk85457/SyncDub-AI</a></p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <p>&copy; 2026 SyncDub AI (com.syncdub.livedub). All rights reserved.</p>
+    <p style="margin-top: 8px;">
+      <a href="#">Privacy Policy</a> &bull;
+      <a href="#permissions">Permissions</a> &bull;
+      <a href="#deletion">Data Deletion</a> &bull;
+      <a href="mailto:tk8545725@gmail.com">Support</a>
+    </p>
+  </footer>
+
+</body>
+</html>

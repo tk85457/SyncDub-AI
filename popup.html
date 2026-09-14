@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SyncDub</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- HERO -->
+    <!-- HERO / CENTERPIECE -->
+    <header class="hero">
+      <div class="hero-bg-glow"></div>
+      <div class="hero-top">
+        <div class="brand">
+          <div class="logo-glow-bg"></div>
+          <img class="brand-icon brand-symbol" src="icons/icon48.png" width="34" height="34" alt="SyncDub Logo">
+          <div class="brand-text">
+            <span class="brand-name">SyncDub <span class="brand-live-badge">AI</span></span>
+            <span class="brand-tagline">Real-time Translation</span>
+          </div>
+        </div>
+        <div class="status-pill" id="status-pill">
+          <span class="status-dot" id="status-dot"></span>
+          <span id="status-text">Offline</span>
+        </div>
+      </div>
+      
+      <!-- Waveform Visualization -->
+      <div class="hero-middle">
+        <div class="waveform" id="waveform">
+          <svg class="waveform-svg" viewBox="0 0 200 40" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="wave-grad-1" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2563eb" stop-opacity="0.1" />
+                <stop offset="50%" stop-color="#60a5fa" stop-opacity="0.75" />
+                <stop offset="100%" stop-color="#2563eb" stop-opacity="0.1" />
+              </linearGradient>
+              <linearGradient id="wave-grad-2" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.05" />
+                <stop offset="50%" stop-color="#34d399" stop-opacity="0.5" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.05" />
+              </linearGradient>
+              <linearGradient id="wave-grad-3" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.1" />
+                <stop offset="50%" stop-color="#60a5fa" stop-opacity="0.6" />
+                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.1" />
+              </linearGradient>
+            </defs>
+            <path class="wave-path wave-1" d="M 0 20 Q 25 5, 50 20 T 100 20 T 150 20 T 200 20 T 250 20 T 300 20 T 350 20 T 400 20" fill="none" stroke="url(#wave-grad-1)" stroke-width="2.5" />
+            <path class="wave-path wave-2" d="M 0 20 Q 20 32, 40 20 T 80 20 T 120 20 T 160 20 T 200 20 T 240 20 T 280 20 T 320 20 T 360 20 T 400 20" fill="none" stroke="url(#wave-grad-2)" stroke-width="1.8" />
+            <path class="wave-path wave-3" d="M 0 20 Q 30 12, 60 20 T 120 20 T 180 20 T 240 20 T 300 20 T 360 20 T 420 20 T 480 20" fill="none" stroke="url(#wave-grad-3)" stroke-width="1.2" />
+          </svg>
+        </div>
+      </div>
+      
+      <!-- Centerpiece Stats & Meta info -->
+      <div class="hero-bottom-row">
+        <div class="hero-meta-item">
+          <span class="meta-label">State</span>
+          <span class="meta-val" id="hero-pipeline-state">System offline</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="meta-label">Target</span>
+          <span class="meta-val" id="hero-lang-name">—</span>
+        </div>
+        <div class="hero-meta-item align-right">
+          <span class="meta-label">Session</span>
+          <div class="session-timer" id="timer-value">00:00</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Inline error notification (replaces alert()) -->
+    <div class="inline-error" id="inline-error"></div>
+
+    <!-- MAIN APP CONTENT (only when logged in) -->
+    <div id="main-app-content" class="hidden">
+
+      <!-- MASTER CONTROL -->
+      <section class="master-section">
+        <button class="master-btn" id="master-btn" type="button">
+          <span class="master-btn-content">
+            <svg class="master-icon" id="master-icon-play" viewBox="0 0 24 24" width="18" height="18">
+              <path d="M8 5v14l11-7z" fill="currentColor"/>
+            </svg>
+            <svg class="master-icon hidden" id="master-icon-stop" viewBox="0 0 24 24" width="18" height="18">
+              <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
+            </svg>
+            <span id="master-btn-text">Start Translation</span>
+          </span>
+          <span class="master-btn-loading" aria-hidden="true">
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="master-btn-loading-text">Connecting</span>
+          </span>
+        </button>
+        <input type="checkbox" id="master-toggle" hidden>
+        <button class="pause-btn hidden" id="pause-btn" type="button">
+          <svg class="pause-icon" id="pause-icon-pause" viewBox="0 0 24 24" width="15" height="15">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/>
+          </svg>
+          <svg class="pause-icon hidden" id="pause-icon-resume" viewBox="0 0 24 24" width="15" height="15">
+            <path d="M8 5v14l11-7z" fill="currentColor"/>
+          </svg>
+          <span id="pause-btn-text">Pause Translation</span>
+        </button>
+      </section>
+
+      <!-- SETTINGS ACCORDION -->
+      <div class="accordion">
+
+        <!-- Account -->
+        <details class="acc-card" open id="card-account">
+          <summary class="acc-header">
+            <div class="acc-title-row">
+              <span class="acc-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </span>
+              <span class="acc-title">My Account</span>
+              <span class="acc-badge status-guest" id="account-status-badge">Guest</span>
+            </div>
+            <svg class="acc-chevron" width="15" height="15" viewBox="0 0 24 24">
+              <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </svg>
+          </summary>
+          <div class="acc-body">
+            <div id="account-logged-out">
+              <p class="acc-desc">Sign in to use your SyncDub subscription for real-time translation.</p>
+              <button id="btn-login" class="action-btn" type="button">Sign In / Subscribe</button>
+            </div>
+            <div id="account-logged-in" class="hidden">
+              <div class="profile-card">
+                <div class="profile-avatar-row">
+                  <div class="profile-avatar" id="profile-avatar">S</div>
+                  <div class="profile-meta">
+                    <span class="profile-email" id="user-email">email@example.com</span>
+                  </div>
+                </div>
+                <div class="profile-metrics">
+                  <div class="metric-item">
+                    <span class="metric-label">Available Dubbing</span>
+                    <span class="metric-value" id="user-credits">-- mins</span>
+                  </div>
+                  <div class="metric-progress-track">
+                    <progress class="metric-progress-fill" id="credits-progress-fill" value="100" max="100" aria-label="Available dubbing balance"></progress>
+                  </div>
+                </div>
+              </div>
+              <div class="account-actions">
+                <button id="btn-logout" class="danger-btn" type="button">Sign Out</button>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- Target Language -->
+        <details class="acc-card" id="card-lang">
+          <summary class="acc-header">
+            <div class="acc-title-row">
+              <span class="acc-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+              </span>
+              <span class="acc-title">Target Language</span>
+              <span class="acc-badge" id="current-lang-badge">—</span>
+            </div>
+            <svg class="acc-chevron" width="15" height="15" viewBox="0 0 24 24">
+              <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </svg>
+          </summary>
+          <div class="acc-body">
+            <div class="search-container">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="lang-search" class="lang-search" placeholder="Search languages...">
+              <button class="search-clear-btn hidden" id="search-clear-btn" type="button" aria-label="Clear search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div class="lang-section-title" id="lang-pinned-title">Recent Languages</div>
+            <div class="lang-pinned-grid" id="lang-pinned-grid"></div>
+            <div class="lang-section-title">All Languages</div>
+            <div class="lang-grid" id="lang-grid"></div>
+            <select id="target-lang" hidden></select>
+          </div>
+        </details>
+
+        <!-- Audio Routing -->
+        <details class="acc-card" id="card-routing">
+          <summary class="acc-header">
+            <div class="acc-title-row">
+              <span class="acc-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+              </span>
+              <span class="acc-title">Audio Routing &amp; Vol</span>
+            </div>
+            <svg class="acc-chevron" width="15" height="15" viewBox="0 0 24 24">
+              <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </svg>
+          </summary>
+          <div class="acc-body">
+            <div class="route-options">
+              <label class="route-card">
+                <input type="radio" name="routing-mode" value="ducking" checked>
+                <div class="route-content">
+                  <span class="route-icon-big">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  </span>
+                  <div class="route-text">
+                    <span class="route-name">Discovery</span>
+                    <span class="route-desc">Orig 15% · AI 100%</span>
+                  </div>
+                </div>
+              </label>
+              <label class="route-card">
+                <input type="radio" name="routing-mode" value="mute">
+                <div class="route-content">
+                  <span class="route-icon-big">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <line x1="23" y1="9" x2="17" y2="15"></line>
+                      <line x1="17" y1="9" x2="23" y2="15"></line>
+                    </svg>
+                  </span>
+                  <div class="route-text">
+                    <span class="route-name">Immersive</span>
+                    <span class="route-desc">Orig 0% · AI 100%</span>
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div class="volume-controls">
+              <div class="vol-slider-row">
+                <div class="vol-label-row">
+                  <span class="vol-label">Original Volume</span>
+                  <span class="vol-value" id="yt-volume-val">15%</span>
+                </div>
+                <input type="range" id="yt-volume-slider" min="0" max="100" value="15" class="vol-slider">
+              </div>
+              <div class="vol-slider-row">
+                <div class="vol-label-row">
+                  <span class="vol-label">AI Translation Volume</span>
+                  <span class="vol-value" id="ai-volume-val">100%</span>
+                </div>
+                <input type="range" id="ai-volume-slider" min="0" max="100" value="100" class="vol-slider">
+              </div>
+            </div>
+          </div>
+        </details>
+
+
+      </div>
+
+      <!-- PRO BANNER -->
+      <section class="pro-banner" id="pro-upgrade-banner">
+        <div class="pro-shimmer"></div>
+        <div class="pro-inner">
+          <div class="pro-left">
+            <span class="pro-badge">TOP UP</span>
+            <span class="pro-title" id="pro-banner-title">Need more minutes?</span>
+            <span class="pro-desc" id="pro-banner-desc">Add dubbing credits — from $5. Never run out mid-stream.</span>
+          </div>
+          <button class="pro-cta" id="btn-upgrade" type="button">
+            <span class="pro-cta-icon" aria-hidden="true">✦</span>
+            <span>Buy credits</span>
+          </button>
+        </div>
+      </section>
+
+    </div><!-- /main-app-content -->
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="login-container hidden">
+      <div class="login-card">
+        <!-- Logo Block at the top -->
+        <div class="login-brand-logo">
+          <div class="logo-glow-bg"></div>
+          <img class="brand-icon brand-symbol" src="icons/icon128.png" width="44" height="44" alt="SyncDub Logo">
+          <div class="brand-text">
+            <span class="brand-name">SyncDub <span class="brand-live-badge">AI</span></span>
+            <span class="brand-tagline">Real-time Translation</span>
+          </div>
+        </div>
+
+        <!-- Premium Signature Waveform (GPU-accelerated, full-width, centered, elegant curves) -->
+        <div class="login-signature-waveform">
+          <svg class="sig-waveform-svg" viewBox="0 0 400 55" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sig-wave-grad-1" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0" />
+                <stop offset="25%" stop-color="#2563eb" stop-opacity="0.7" />
+                <stop offset="50%" stop-color="#ec4899" stop-opacity="0.95" />
+                <stop offset="75%" stop-color="#2563eb" stop-opacity="0.7" />
+                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+              </linearGradient>
+              <linearGradient id="sig-wave-grad-2" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2563eb" stop-opacity="0" />
+                <stop offset="30%" stop-color="#3b82f6" stop-opacity="0.5" />
+                <stop offset="50%" stop-color="#10b981" stop-opacity="0.8" />
+                <stop offset="70%" stop-color="#3b82f6" stop-opacity="0.5" />
+                <stop offset="100%" stop-color="#2563eb" stop-opacity="0" />
+              </linearGradient>
+              <linearGradient id="sig-wave-grad-3" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#ec4899" stop-opacity="0" />
+                <stop offset="20%" stop-color="#2563eb" stop-opacity="0.45" />
+                <stop offset="50%" stop-color="#6366f1" stop-opacity="0.75" />
+                <stop offset="80%" stop-color="#2563eb" stop-opacity="0.45" />
+                <stop offset="100%" stop-color="#ec4899" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path class="sig-wave-path sig-wave-1" d="" fill="none" stroke="url(#sig-wave-grad-1)" stroke-width="1.8" />
+            <path class="sig-wave-path sig-wave-2" d="" fill="none" stroke="url(#sig-wave-grad-2)" stroke-width="1.2" opacity="0.85" />
+            <path class="sig-wave-path sig-wave-3" d="" fill="none" stroke="url(#sig-wave-grad-3)" stroke-width="0.7" opacity="0.6" />
+          </svg>
+        </div>
+
+        <div class="login-header">
+          <h2>Real-Time AI Voice Translation.</h2>
+          <p class="login-subtitle">Hear Any Video. In Your Language.</p>
+        </div>
+
+        <div class="login-features">
+          <div class="feat-card">
+            <span class="feat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </span>
+            <div class="feat-text">
+              <h3>75+ Languages</h3>
+            </div>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </span>
+            <div class="feat-text">
+              <h3>Sub-Second Latency</h3>
+            </div>
+          </div>
+          <div class="feat-card">
+            <span class="feat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+                <line x1="12" x2="12" y1="19" y2="22"></line>
+              </svg>
+            </span>
+            <div class="feat-text">
+              <h3>Natural AI Voices</h3>
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-google-login" class="google-btn" type="button">
+          <svg class="google-logo" viewBox="0 0 24 24" width="18" height="18">
+            <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.65 1.42 7.53l3.87 3C6.24 7.69 8.87 5.04 12 5.04z"/>
+            <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.36H12v4.51h6.44c-.28 1.48-1.11 2.73-2.36 3.57l3.66 2.84c2.14-1.97 3.75-4.88 3.75-8.56z"/>
+            <path fill="#FBBC05" d="M5.29 14.53c-.25-.75-.39-1.55-.39-2.38s.14-1.63.39-2.38l-3.87-3C.61 8.35 0 10.1 0 12s.61 3.65 1.42 5.25l3.87-3.02z"/>
+            <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.66-2.84c-1.01.68-2.31 1.09-4.3 1.09-3.13 0-5.76-2.65-6.71-5.49l-3.87 3.02C3.37 20.35 7.35 23 12 23z"/>
+          </svg>
+          <span class="google-spinner" aria-hidden="true"></span>
+          <span class="google-btn-label">Continue with Google</span>
+        </button>
+
+        <div class="login-trust-section">
+          <div class="trust-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span>Secure Google<br>Authentication</span>
+          </div>
+          <div class="trust-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>No Password<br>Required</span>
+          </div>
+          <div class="trust-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <span>Instant Access<br>No Signup Form</span>
+          </div>
+        </div>
+
+        <div class="credentials-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <polyline points="9 11 11 13 15 9"></polyline>
+          </svg>
+          <span>Your Google credentials are never stored.</span>
+        </div>
+
+        <div class="login-legal">
+          By continuing, you agree to our <a href="#" id="link-tos">Terms of Service</a> and <a href="#" id="link-privacy">Privacy Policy</a>.
+        </div>
+      </div>
+    </div>
+
+    <!-- PRICING MODAL -->
+    <div id="pricing-modal" class="modal-overlay hidden">
+      <div class="pricing-card-container">
+        <div class="pricing-header">
+          <h3>Choose Credit Package</h3>
+          <button id="btn-close-pricing" class="btn-close-modal" type="button">&times;</button>
+        </div>
+        <p class="pricing-desc">Added to your account balance instantly after payment.</p>
+        <div class="packages-grid">
+          <div class="package-item popular" data-pack-key="dodo-starter">
+            <div class="pack-popular-badge">100 Min</div>
+            <div class="pack-details">
+              <span class="pack-title">SyncDub Starter</span>
+              <span class="pack-desc">Secure checkout by Dodo Payments</span>
+            </div>
+            <div class="pack-right">
+              <span class="pack-price">$5.99</span>
+              <button class="btn-buy-pack" type="button">Buy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script src="flag-data.js"></script>
+  <script src="languages.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
