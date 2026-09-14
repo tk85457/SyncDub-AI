@@ -319,7 +319,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       textBaseline: TextBaseline.alphabetic,
                       children: [
                         Text(
-                          state.creditsRemaining.toStringAsFixed(1),
+                          state.isCreditsLoaded
+                              ? state.creditsRemaining.toStringAsFixed(1)
+                              : '...',
                           style: TextStyle(
                             fontSize: 34,
                             fontWeight: FontWeight.w900,
@@ -402,7 +404,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Iconsax.crown,
                       iconColor: const Color(0xFFF59E0B),
                       title: 'Manage Subscription',
-                      subtitle: '${state.creditsRemaining.toStringAsFixed(0)} live minutes available',
+                      subtitle: state.isCreditsLoaded
+                          ? '${state.creditsRemaining.toStringAsFixed(0)} live minutes available'
+                          : 'Syncing subscription quota...',
                       trailing: Icon(Iconsax.arrow_right_3, size: 16, color: fg3),
                       onTap: () {
                         state.triggerHaptic();

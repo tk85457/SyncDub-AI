@@ -98,15 +98,25 @@ class HomeScreen extends StatelessWidget {
                           color: AppTheme.emerald,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          '${state.creditsRemaining.toStringAsFixed(0)} min',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.emerald,
-                            letterSpacing: -0.2,
+                        if (!state.isCreditsLoaded)
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppTheme.emerald,
+                            ),
+                          )
+                        else
+                          Text(
+                            '${state.creditsRemaining.toStringAsFixed(0)} min',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.emerald,
+                              letterSpacing: -0.2,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),

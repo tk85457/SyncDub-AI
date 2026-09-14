@@ -320,7 +320,9 @@ class SettingsScreen extends StatelessWidget {
                     iconBg: AppTheme.amber.withValues(alpha: 0.12),
                     iconColor: AppTheme.amber,
                     name: 'Live Dubbing Quota',
-                    sub: '${state.creditsRemaining.toStringAsFixed(0)} minutes available for real-time translation',
+                    sub: state.isCreditsLoaded
+                        ? '${state.creditsRemaining.toStringAsFixed(0)} minutes available for real-time translation'
+                        : 'Loading translation quota...',
                     val: 'Upgrade',
                     valColor: AppTheme.amber,
                     hasArrow: true,

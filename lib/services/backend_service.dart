@@ -222,6 +222,7 @@ class SyncDubBackendService {
   }
 
   Timer? _handshakeTimeoutTimer;
+  String? _lastServerReportReason;
 
   /// Start live real-time bidirectional translation stream via WebSocket
   Future<void> startLiveDubbingSession({
@@ -235,76 +236,44 @@ class SyncDubBackendService {
   }) async {
     await stopLiveDubbingSession();
     _setupAckReceived = false;
+    _lastServerReportReason = null;
 
     try {
       onStatusChange('Connecting to SyncDub AI Engine...');
+
+      // 1. Acquire valid access token (prefer active Google session, fallback to default)
       var token = await getAccessToken();
       if (token == null || token.isEmpty || isJwtExpired(token)) {
         token = await getAccessToken(forceRefresh: true);
       }
 
+      // 2. Pre-flight check: wake up Render if sleeping
+      onStatusChange('Waking up SyncDub AI Engine...');
+      final healthCheck = await checkBackendHealth();
+      if (!healthCheck['isHealthy']) {
+        debugPrint('[BackendService] Warm-up ping returned degraded status, continuing to connect...');
+      }
+
+      onStatusChange('Connecting to Cloud Pipeline...');
       WebSocketChannel? channel;
       final wsUri = Uri.parse(SyncDubBackendConfig.proxyWsUrl);
       try {
         channel = WebSocketChannel.connect(wsUri);
-        await channel.ready.timeout(const Duration(seconds: 30));
+        await channel.ready.timeout(const Duration(seconds: 40));
       } catch (e) {
-        debugPrint('[BackendService] Primary WS connection attempt error: $e, retrying...');
-        onStatusChange('Waking up SyncDub AI Engine...');
+        debugPrint('[BackendService] Primary WS connection attempt failed: $e, retrying once...');
+        onStatusChange('Reconnecting to AI Cloud Engine...');
+        await Future.delayed(const Duration(milliseconds: 1500));
         channel = WebSocketChannel.connect(wsUri);
-        await channel.ready.timeout(const Duration(seconds: 35));
+        await channel.ready.timeout(const Duration(seconds: 45));
       }
+
       _wsChannel = channel;
       _isConnected = true;
-      onStatusChange('Synchronizing AI Pipeline...');
 
-      // 1. Send authentication frame
-      final authMsg = jsonEncode({
-        'action': 'authenticate',
-        'token': token ?? '',
-        'targetLang': targetLanguageCode,
-      });
-      _wsChannel!.sink.add(authMsg);
-
-      // 2. Setup message for Gemini 3.5 Live Translate with active VAD
-      final setupMsg = jsonEncode({
-        'setup': {
-          'model': 'models/gemini-3.5-live-translate-preview',
-          'generation_config': {
-            'response_modalities': ['AUDIO'],
-            'translation_config': {
-              'target_language_code': targetLanguageCode,
-              'echo_target_language': true,
-            },
-          },
-          'realtime_input_config': {
-            'automatic_activity_detection': {
-              'disabled': false,
-              'start_of_speech_sensitivity': 'START_SENSITIVITY_HIGH',
-              'end_of_speech_sensitivity': 'END_SENSITIVITY_HIGH',
-              'prefix_padding_ms': 20,
-              'silence_duration_ms': 300,
-            },
-          },
-          'input_audio_transcription': {},
-          'output_audio_transcription': {},
-        },
-      });
-      _wsChannel!.sink.add(setupMsg);
-
-      // Arm watchdog: if setupComplete is not received within 25 seconds, abort and report timeout
-      _handshakeTimeoutTimer?.cancel();
-      _handshakeTimeoutTimer = Timer(const Duration(seconds: 25), () {
-        if (!_setupAckReceived && _isConnected) {
-          debugPrint('[BackendService] Handshake timeout: setupComplete not received within 25s');
-          stopLiveDubbingSession();
-          onDisconnected('Engine handshake timed out. Please tap Start to retry.');
-        }
-      });
-
-      // 3. Listen to incoming real-time frames
+      // 3. Attach stream listener FIRST before sending any data frames
       _wsSubscription = _wsChannel!.stream.listen(
-        (data) async {
+        (dynamic data) async {
           try {
             final now = DateTime.now().millisecondsSinceEpoch;
             if (_lastPingTimestamp > 0) {
@@ -313,7 +282,16 @@ class SyncDubBackendService {
               _lastPingTimestamp = 0;
             }
 
-            final decoded = jsonDecode(data.toString());
+            final String text;
+            if (data is String) {
+              text = data;
+            } else if (data is List<int>) {
+              text = utf8.decode(data, allowMalformed: true);
+            } else {
+              text = data.toString();
+            }
+
+            final decoded = jsonDecode(text);
             final List<Map<String, dynamic>> messages = [];
             if (decoded is List) {
               for (final item in decoded) {
@@ -330,6 +308,27 @@ class SyncDubBackendService {
             }
 
             for (final parsed in messages) {
+              // Server error frame capture
+              if (parsed.containsKey('error')) {
+                final errObj = parsed['error'];
+                if (errObj is Map && errObj.containsKey('message')) {
+                  _lastServerReportReason = errObj['message']?.toString();
+                } else {
+                  _lastServerReportReason = errObj?.toString();
+                }
+                debugPrint('[BackendService] Server error message captured: $_lastServerReportReason');
+              }
+
+              // Server diagnostics report frame capture
+              if (parsed['action'] == 'serverCloseInfo') {
+                final report = parsed['report'] as Map<String, dynamic>?;
+                final reason = report?['reason']?.toString();
+                if (reason != null && reason.isNotEmpty) {
+                  _lastServerReportReason = reason;
+                }
+                debugPrint('[BackendService] Server close diagnostics captured: $_lastServerReportReason');
+              }
+
               // Credits Update
               if (parsed['action'] == 'creditsUpdate') {
                 final credits = (parsed['credits'] as num?)?.toDouble() ?? 3000.0;
@@ -340,14 +339,14 @@ class SyncDubBackendService {
                 }
               }
 
-              // Setup ACK: Check if setupComplete exists (it is a JSON object {})
+              // Setup ACK: Check if setupComplete exists
               if (parsed.containsKey('setupComplete') && !_setupAckReceived) {
                 _setupAckReceived = true;
                 _handshakeTimeoutTimer?.cancel();
                 _handshakeTimeoutTimer = null;
                 onStatusChange('Live Dubbing Active');
                 debugPrint('[BackendService] SetupComplete received from Gemini. Activating audio capture pipeline...');
-                // Pipe internal video audio or microphone chunks directly to WebSocket
+                // Pipe audio chunks directly to WebSocket
                 AudioPipelineService().onAudioChunkCaptured = sendAudioChunk;
                 await AudioPipelineService().startAudioCapture(mode: captureMode);
               }
@@ -402,21 +401,23 @@ class SyncDubBackendService {
           _handshakeTimeoutTimer = null;
           final code = channel?.closeCode;
           final reason = channel?.closeReason;
-          debugPrint('[BackendService] WS stream closed (code=$code, reason=$reason)');
+          debugPrint('[BackendService] WS stream closed (code=$code, reason=$reason, lastReport=$_lastServerReportReason)');
           _isConnected = false;
           _setupAckReceived = false;
 
-          String userMessage = 'Connection closed';
+          String userMessage = _lastServerReportReason ?? 'Connection closed';
           if (code == 1013) {
-            userMessage = 'Session limit reached (max 2 concurrent sessions). Please close any open browser sessions.';
+            userMessage = 'Previous session is clearing on cloud server. Please tap Start to reconnect.';
+          } else if (code == 4001) {
+            userMessage = 'Authentication timeout with cloud server. Please tap Start to retry.';
           } else if (code == 4002) {
-            userMessage = 'Insufficient translation credits remaining.';
+            userMessage = 'Insufficient translation credits remaining. Please upgrade your plan.';
           } else if (code == 4003) {
             userMessage = 'Authentication token expired. Please re-authenticate.';
           } else if (code == 4500) {
             userMessage = reason != null && reason.isNotEmpty
                 ? 'Server error: $reason'
-                : 'AI Translation engine temporarily unavailable. Please retry.';
+                : 'AI Translation engine temporarily unavailable. Please retry in a few seconds.';
           } else if (reason != null && reason.isNotEmpty) {
             userMessage = reason;
           }
@@ -424,7 +425,53 @@ class SyncDubBackendService {
         },
       );
 
-      // Periodic ping for real latency telemetry
+      // 4. Send authentication frame
+      onStatusChange('Authenticating with SyncDub...');
+      final authMsg = jsonEncode({
+        'action': 'authenticate',
+        'token': token ?? '',
+        'targetLang': targetLanguageCode,
+      });
+      _wsChannel!.sink.add(authMsg);
+
+      // 5. Send setup frame for Gemini 3.5 Live Translate
+      onStatusChange('Synchronizing AI Pipeline...');
+      final setupMsg = jsonEncode({
+        'setup': {
+          'model': 'models/gemini-3.5-live-translate-preview',
+          'generation_config': {
+            'response_modalities': ['AUDIO'],
+            'translation_config': {
+              'target_language_code': targetLanguageCode,
+              'echo_target_language': true,
+            },
+          },
+          'realtime_input_config': {
+            'automatic_activity_detection': {
+              'disabled': false,
+              'start_of_speech_sensitivity': 'START_SENSITIVITY_HIGH',
+              'end_of_speech_sensitivity': 'END_SENSITIVITY_HIGH',
+              'prefix_padding_ms': 20,
+              'silence_duration_ms': 300,
+            },
+          },
+          'input_audio_transcription': {},
+          'output_audio_transcription': {},
+        },
+      });
+      _wsChannel!.sink.add(setupMsg);
+
+      // 6. Arm handshake watchdog timer (45 seconds for cloud cold-starts)
+      _handshakeTimeoutTimer?.cancel();
+      _handshakeTimeoutTimer = Timer(const Duration(seconds: 45), () {
+        if (!_setupAckReceived && _isConnected) {
+          debugPrint('[BackendService] Handshake watchdog triggered: setupComplete not received within 45s');
+          stopLiveDubbingSession();
+          onDisconnected('Cloud AI Engine took too long to initialize. Please tap Start to retry.');
+        }
+      });
+
+      // 7. Periodic ping for real latency telemetry
       _latencyPingTimer?.cancel();
       _latencyPingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         if (_isConnected && _wsChannel != null) {
@@ -450,6 +497,11 @@ class SyncDubBackendService {
     _latencyPingTimer?.cancel();
     _latencyPingTimer = null;
     _lastPingTimestamp = 0;
+
+    // Send graceful close packet to release server slots immediately
+    try {
+      _wsChannel?.sink.add(jsonEncode({'action': 'close'}));
+    } catch (_) {}
 
     await _wsSubscription?.cancel();
     _wsSubscription = null;

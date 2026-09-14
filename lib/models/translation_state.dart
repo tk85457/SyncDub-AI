@@ -129,7 +129,9 @@ class TranslationState extends ChangeNotifier {
   StreamSubscription? _profileSubscription;
 
   // Real-Time Telemetry
-  double _creditsRemaining = 45.0; // Minutes available
+  double? _creditsRemaining; // Minutes available (null until fetched from Supabase/cloud)
+  bool get isCreditsLoaded => _creditsRemaining != null;
+  double get creditsRemaining => _creditsRemaining ?? 0.0;
   String _userPlan = 'Starter Free';
   int _latencyMs = 0;
   double _accuracyPct = 0.0;
@@ -227,7 +229,6 @@ class TranslationState extends ChangeNotifier {
 
 
 
-  double get creditsRemaining => _creditsRemaining;
   String get userPlan => _userPlan;
   int get latencyMs => _latencyMs;
   double get accuracyPct => _accuracyPct;
@@ -306,6 +307,7 @@ class TranslationState extends ChangeNotifier {
             final mins = (row['translation_minutes_remaining'] as num?)?.toDouble();
             if (mins != null) {
               _creditsRemaining = mins;
+              SharedPreferences.getInstance().then((p) => p.setDouble('syncdub_cached_user_credits', mins));
             }
             final plan = row['plan']?.toString();
             if (plan != null) {
@@ -326,6 +328,7 @@ class TranslationState extends ChangeNotifier {
   }
 
   Future<void> _syncProfile() async {
+    final prefs = await SharedPreferences.getInstance();
     final profile = await AuthService().fetchUserProfile();
     if (profile != null) {
       _userPlan = profile['plan'] == 'pro'
@@ -333,7 +336,11 @@ class TranslationState extends ChangeNotifier {
           : profile['plan'] == 'studio'
               ? 'Creator Studio'
               : 'Starter Free';
-      _creditsRemaining = profile['minutes'] ?? 45.0;
+      final mins = (profile['minutes'] as num?)?.toDouble();
+      if (mins != null) {
+        _creditsRemaining = mins;
+        await prefs.setDouble('syncdub_cached_user_credits', mins);
+      }
       notifyListeners();
     } else {
       final planInfo = await SyncDubBackendService().fetchLiveUserPlan();
@@ -344,6 +351,7 @@ class TranslationState extends ChangeNotifier {
                 ? 'Creator Studio'
                 : 'Starter Free';
         _creditsRemaining = planInfo.minutesRemaining;
+        await prefs.setDouble('syncdub_cached_user_credits', planInfo.minutesRemaining);
         notifyListeners();
       }
     }
@@ -386,6 +394,11 @@ class TranslationState extends ChangeNotifier {
       } catch (_) {}
     }
 
+    // Load Cached Credits if available
+    final cachedCredits = prefs.getDouble('syncdub_cached_user_credits');
+    if (cachedCredits != null && _creditsRemaining == null) {
+      _creditsRemaining = cachedCredits;
+    }
   }
 
   Future<void> _saveHistorySessions() async {
@@ -594,7 +607,7 @@ class TranslationState extends ChangeNotifier {
       notifyListeners();
     } else {
       // 1. Quota validation
-      if (_creditsRemaining <= 0) {
+      if (_creditsRemaining != null && _creditsRemaining! <= 0) {
         _activeError = AppError(
           title: 'Translation Quota Exhausted',
           reason: 'You have 0 minutes remaining in your account. Please upgrade to continue real-time dubbing.',
