@@ -12,6 +12,9 @@ enum AppErrorType {
   database,
   translationServer,
   permission,
+  video,
+  rateLimit,
+  timeout,
   general,
 }
 
@@ -30,7 +33,7 @@ class AppError {
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
-  /// Enterprise-grade sanitization: ensures zero internal URLs, JWTs, table names, or stack traces leak to the user
+  /// Enterprise-grade sanitization: ensures zero internal URLs, JWTs, table names, IPs, or stack traces leak to the user
   factory AppError.fromException(dynamic error, {String? context}) {
     if (error == null) {
       return AppError(
@@ -48,6 +51,7 @@ class AppError {
       final msg = error.message.toLowerCase();
       if (msg.contains('invalid claim') ||
           msg.contains('token has expired') ||
+          msg.contains('refresh_token_not_found') ||
           msg.contains('jwt')) {
         return AppError(
           title: 'Session Expired',
@@ -167,63 +171,130 @@ class AppError {
       );
     }
 
-    // 5. Network, Socket & DNS Exceptions
+    // 5. Quota / Credits / Billing
+    if (rawStr.contains('quota') ||
+        rawStr.contains('insufficient credits') ||
+        rawStr.contains('insufficient balance') ||
+        rawStr.contains('insufficient quota') ||
+        rawStr.contains('insufficient minutes') ||
+        RegExp(r'\b4002\b').hasMatch(rawStr) ||
+        rawStr.contains('credits remaining') ||
+        rawStr.contains('upgrade your plan')) {
+      return AppError(
+        title: 'Translation Quota Exhausted',
+        reason:
+            'Your account translation minutes have been used. Upgrade your plan to continue live speech dubbing.',
+        recoveryAction: 'Upgrade Plan',
+        type: AppErrorType.quota,
+      );
+    }
+
+    // 6. Network, Socket, TCP, DNS & WebSocket Stream Exceptions
     if (error is SocketException ||
+        error is HttpException ||
         rawStr.contains('failed host lookup') ||
         rawStr.contains('connection refused') ||
-        rawStr.contains('network is unreachable')) {
+        rawStr.contains('network is unreachable') ||
+        rawStr.contains('no route to host') ||
+        rawStr.contains('wsasend') ||
+        rawStr.contains('forcibly closed') ||
+        rawStr.contains('remote host') ||
+        rawStr.contains('connection reset') ||
+        rawStr.contains('broken pipe') ||
+        rawStr.contains('stream closed') ||
+        rawStr.contains('status code 1006') ||
+        rawStr.contains('status code 1001') ||
+        rawStr.contains('status code 1005') ||
+        rawStr.contains('websocket') ||
+        rawStr.contains('connection closed') ||
+        rawStr.contains('connection error') ||
+        rawStr.contains('clientexception') ||
+        rawStr.contains('socketexception') ||
+        rawStr.contains('software caused connection abort')) {
       return AppError(
-        title: 'No Internet Connection',
+        title: 'Connection Interrupted',
         reason:
-            'SyncDub could not reach the servers. Please check your Wi-Fi or mobile data.',
-        recoveryAction: 'Check connection & retry',
+            'The live translation connection was interrupted. Please check your internet connection and tap Reconnect.',
+        recoveryAction: 'Tap to Reconnect',
         type: AppErrorType.network,
       );
     }
 
-    // 6. Timeout Exceptions
+    // 7. YouTube & Video Streaming Exceptions
+    if (rawStr.contains('requestlimitexceeded') ||
+        rawStr.contains('rate limit') ||
+        rawStr.contains('too many requests') ||
+        rawStr.contains('suspicious') ||
+        rawStr.contains('429')) {
+      return AppError(
+        title: 'Server Temporarily Busy',
+        reason:
+            'YouTube or translation servers are experiencing temporary rate limits. Please wait a moment and try again.',
+        recoveryAction: 'Retry in a moment',
+        type: AppErrorType.rateLimit,
+      );
+    }
+
+    if (rawStr.contains('videounplayable') ||
+        rawStr.contains('unplayable') ||
+        rawStr.contains('private video') ||
+        rawStr.contains('restricted') ||
+        rawStr.contains('copyright') ||
+        rawStr.contains('video unavailable') ||
+        rawStr.contains('sign in to confirm your age')) {
+      return AppError(
+        title: 'Video Unavailable',
+        reason:
+            'This video is private, restricted, or age-gated on YouTube. Please try another public video link.',
+        recoveryAction: 'Paste another video link',
+        type: AppErrorType.video,
+      );
+    }
+
+    // 8. Timeout Exceptions
     if (error is TimeoutException ||
         rawStr.contains('timed out') ||
         rawStr.contains('deadline exceeded')) {
       return AppError(
         title: 'Connection Timed Out',
         reason:
-            'The live translation server took too long to respond. Network latency may be elevated.',
-        recoveryAction: 'Tap reconnect or check signal',
-        type: AppErrorType.network,
+            'The operation took too long to complete. Network latency may be elevated.',
+        recoveryAction: 'Tap to Retry',
+        type: AppErrorType.timeout,
       );
     }
 
-    // 7. TLS / SSL Handshake Exceptions
+    // 8. TLS / SSL Handshake Exceptions
     if (error is HandshakeException ||
         rawStr.contains('handshake') ||
-        rawStr.contains('certificate')) {
+        rawStr.contains('certificate') ||
+        rawStr.contains('tls') ||
+        rawStr.contains('ssl')) {
       return AppError(
         title: 'Secure Connection Issue',
         reason:
-            'Could not establish an encrypted connection to the translation engine.',
-        recoveryAction: 'Check device date/time & retry',
+            'Could not establish an encrypted connection to the translation engine. Please check your device date and network.',
+        recoveryAction: 'Check date/time & retry',
         type: AppErrorType.network,
       );
     }
 
-    // 8. WebSocket Stream Exceptions
-    if (rawStr.contains('websocket') ||
-        rawStr.contains('connection reset') ||
-        rawStr.contains('broken pipe') ||
-        rawStr.contains('stream closed') ||
-        rawStr.contains('status code 1006') ||
-        rawStr.contains('status code 1001')) {
+    // 9. Server Maintenance / Overload (5xx codes, busy)
+    if (RegExp(r'\b(50[0-4]|4500)\b').hasMatch(rawStr) ||
+        rawStr.contains('temporarily unavailable') ||
+        rawStr.contains('server error') ||
+        rawStr.contains('overloaded') ||
+        rawStr.contains('service unavailable')) {
       return AppError(
-        title: 'Live Audio Stream Disconnected',
+        title: 'Translation Service Busy',
         reason:
-            'The live translation socket was disconnected. SyncDub will automatically attempt to reconnect.',
-        recoveryAction: 'Reconnecting automatically...',
+            'The AI translation engine is temporarily undergoing high load. Please try again in a few moments.',
+        recoveryAction: 'Retry in a moment',
         type: AppErrorType.translationServer,
       );
     }
 
-    // 9. Microphone & Audio Recording Exceptions
+    // 10. Microphone & Audio Recording Exceptions
     if (rawStr.contains('permission_denied') ||
         rawStr.contains('record_audio') ||
         rawStr.contains('microphone') ||
@@ -237,7 +308,7 @@ class AppError {
       );
     }
 
-    // 10. Hardware Audio Output Routing Exceptions
+    // 11. Hardware Audio Output Routing Exceptions
     if (rawStr.contains('audio_routing') ||
         rawStr.contains('bluetooth') ||
         rawStr.contains('headset') ||
@@ -251,10 +322,11 @@ class AppError {
       );
     }
 
-    // 11. Format & Parsing Exceptions (Bad JSON or invalid responses)
+    // 12. Format & Parsing Exceptions (Bad JSON or invalid responses)
     if (error is FormatException ||
         rawStr.contains('formatexception') ||
-        rawStr.contains('jsondecode')) {
+        rawStr.contains('jsondecode') ||
+        rawStr.contains('unexpected character')) {
       return AppError(
         title: 'Data Format Notice',
         reason:
@@ -264,7 +336,7 @@ class AppError {
       );
     }
 
-    // 12. Default Sanitized Fallback - Absolutely ZERO leaks
+    // 13. Default Sanitized Fallback - Absolutely ZERO technical leaks
     return AppError(
       title: context != null ? '$context Notice' : 'Notice',
       reason: sanitizeRawMessage(error.toString()),
@@ -273,42 +345,75 @@ class AppError {
     );
   }
 
-  /// Sanitizer function that scrubs all sensitive information
+  /// Sanitizer function that aggressively scrubs all technical jargon and leaks
   static String sanitizeRawMessage(String raw) {
-    var sanitized = raw;
+    var sanitized = raw.trim();
+
+    // Strip "Exception: " prefix from standard Dart exceptions if present
+    if (sanitized.startsWith('Exception: ')) {
+      sanitized = sanitized.substring('Exception: '.length).trim();
+    }
+
+    // Check if the raw string contains low-level technical exception traces or socket drops
+    final rawLower = sanitized.toLowerCase();
+    if (rawLower.contains('socketexception') ||
+        rawLower.contains('httpexception') ||
+        rawLower.contains('clientexception') ||
+        rawLower.contains('failed host lookup') ||
+        rawLower.contains('tcp') ||
+        rawLower.contains('wsasend') ||
+        rawLower.contains('connection reset') ||
+        rawLower.contains('connection refused') ||
+        rawLower.contains('broken pipe') ||
+        rawLower.contains('connection was forcibly') ||
+        rawLower.contains('remote host') ||
+        rawLower.contains('bad state: stream has already been listened to') ||
+        rawLower.contains('nullpointer') ||
+        rawLower.contains('errno =') ||
+        rawLower.contains('dart:') ||
+        rawLower.contains('kotlin') ||
+        rawLower.contains('android.') ||
+        rawLower.contains('com.syncdub') ||
+        rawLower.contains('stack trace')) {
+      return 'The connection was temporarily interrupted. Please tap to try again.';
+    }
 
     // 1. Scrub complete URLs
     sanitized = sanitized.replaceAll(
       RegExp(r'(https?|wss?|ftp)://[^\s/$.?#].[^\s]*', caseSensitive: false),
-      '[SyncDub Service]',
+      '',
     );
 
-    // 2. Scrub IP Addresses & Ports
+    // 2. Scrub IP Addresses (IPv4 and IPv6) & Ports
+    sanitized = sanitized.replaceAll(
+      RegExp(r'\[?\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{0,4}\]?(:\d+)?'),
+      '',
+    );
     sanitized = sanitized.replaceAll(
       RegExp(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b'),
-      '[Server Node]',
+      '',
     );
 
     // 3. Scrub JWT tokens & Bearer tokens
     sanitized = sanitized.replaceAll(
       RegExp(r'eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}(\.[a-zA-Z0-9_-]+)?'),
-      '[REDACTED_SECURITY_TOKEN]',
+      '',
     );
     sanitized = sanitized.replaceAll(
       RegExp(r'Bearer\s+[a-zA-Z0-9_\-\.]+', caseSensitive: false),
-      'Bearer [REDACTED]',
+      '',
     );
 
     // 4. Scrub Google Client IDs & Secrets
     sanitized = sanitized.replaceAll(
       RegExp(r'\d{6,}-[a-z0-9]+\.apps\.googleusercontent\.com'),
-      '[GOOGLE_CLIENT_ID]',
+      '',
     );
 
     // 5. Scrub Database Schemas, Tables, Columns & SQL terms
     sanitized = sanitized.replaceAll(
       RegExp(r'public\.[a-zA-Z0-9_]+'),
-      'data store',
+      '',
     );
     sanitized = sanitized.replaceAll(
       RegExp(
@@ -316,10 +421,6 @@ class AppError {
         caseSensitive: false,
       ),
       '',
-    );
-    sanitized = sanitized.replaceAll(
-      RegExp(r'relation\s+"[^"]+"\s+does\s+not\s+exist', caseSensitive: false),
-      'Resource temporarily unavailable',
     );
 
     // 6. Scrub Local File Paths & Stack traces
@@ -334,6 +435,7 @@ class AppError {
     sanitized = sanitized.replaceAll(
       RegExp(
         r'(Exception|Error|PlatformException|ClientException|SocketException|HttpException|FormatException):',
+        caseSensitive: false,
       ),
       '',
     );
@@ -342,7 +444,7 @@ class AppError {
     // Clean up whitespace
     sanitized = sanitized.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-    if (sanitized.isEmpty || sanitized.length > 120) {
+    if (sanitized.isEmpty || sanitized.length > 90 || sanitized.contains('->')) {
       return 'The requested operation could not be completed. Please try again.';
     }
 

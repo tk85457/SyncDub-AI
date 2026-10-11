@@ -27,6 +27,10 @@ SyncDub AI is a real-time, low-latency (<380ms) neural speech dubbing Flutter ap
    - Supports interactive demo dubbing, floating overlay mock, 1-tap permissions, and live language selection.
 5. **No Visual Overflows**:
    - All screens must use `LayoutBuilder`, `SingleChildScrollView`, or `Flexible` widgets to ensure zero render overflows on any screen size.
+6. **Mandatory Skills & Tools First for Every Prompt (Universal Rule)**:
+   - User jab bhi kuch bhi prompt kare, agent ko sabse pehle available **Skills**, **MCP Tools** (jaise `dart-mcp-server`, `supabase`, `github`, `android_ui_verification`, flutter/ui skills), aur relevant utilities ko check karna hoga.
+   - Behtar aur highest-quality output ke liye jo bhi relevant tools ya skills available hain, unhe **anivarya (mandatory)** roop se pehle use kiya jayega.
+   - Bina relevant skills/tools ko consult kiye koi bhi code change ya architectural faisla nahi liya jayega. Har prompt par sabse pehle relevant tools aur skills ka sakriya upyog karke hi kaam execute karna hai.
 
 ## Build & Test Commands
 - Check lint & types: `flutter analyze lib` (Must have 0 issues)

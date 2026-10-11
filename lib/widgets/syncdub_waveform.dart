@@ -40,7 +40,27 @@ class _SyncDubLiveWaveformState extends State<SyncDubLiveWaveform>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
-    )..repeat();
+    );
+    if (widget.isLive || widget.isConnecting) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SyncDubLiveWaveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final active = widget.isLive || widget.isConnecting;
+    final wasActive = oldWidget.isLive || oldWidget.isConnecting;
+    if (active != wasActive) {
+      if (active) {
+        if (!_controller.isAnimating) _controller.repeat();
+      } else {
+        if (_controller.isAnimating) {
+          _controller.stop();
+          _controller.value = 0.0;
+        }
+      }
+    }
   }
 
   @override

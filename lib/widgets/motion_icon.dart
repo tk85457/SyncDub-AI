@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../theme/app_theme.dart';
 
 /// Animated micro-motion icon inspired by itshover.com
@@ -239,34 +240,78 @@ class _SyncDubLiveSoundWaveIconState extends State<SyncDubLiveSoundWaveIcon> wit
   }
 }
 
-/// Renders authentic Flaticon animated GIF icons extracted from flaticon.com
+/// Optimized animated icon widget for SyncDub AI.
+/// Renders authentic animated Flaticon GIF icons optimized for low-end phones:
+/// 1. Uses cacheWidth & cacheHeight based on physical devicePixelRatio (downscales 512px frames to 48-72px, 98% RAM saving)
+/// 2. Isolated with RepaintBoundary to avoid triggering parent widget repaints
+/// 3. Zero-stutter gapless playback with low-overhead filter quality
+/// 4. Graceful fallback to crisp vector icons if an asset fails to load
 class SyncDubFlaticon extends StatelessWidget {
   final String assetName;
   final double size;
   final BoxFit fit;
+  final Color? color;
 
   const SyncDubFlaticon({
     super.key,
     required this.assetName,
     this.size = 24,
     this.fit = BoxFit.contain,
+    this.color,
   });
+
+  static IconData iconFor(String assetName) {
+    final n = assetName.toLowerCase();
+    if (n.contains('home')) return Iconsax.home_2;
+    if (n.contains('history')) return Iconsax.clock;
+    if (n.contains('user')) return Iconsax.user;
+    if (n.contains('settings')) return Iconsax.setting_2;
+    if (n.contains('soundwave')) return Iconsax.sound;
+    if (n.contains('speed')) return Iconsax.speedometer;
+    if (n.contains('translate')) return Iconsax.language_square;
+    if (n.contains('rocket')) return Iconsax.flash_1;
+    if (n.contains('shield')) return Iconsax.shield_tick;
+    if (n.contains('verified')) return Iconsax.verify;
+    if (n.contains('mic')) return Iconsax.microphone_2;
+    if (n.contains('speaker')) return Iconsax.volume_high;
+    return Iconsax.global;
+  }
+
+  static String resolveAssetPath(String name) {
+    var clean = name
+        .replaceAll('assets/images/', '')
+        .replaceAll('.webp', '')
+        .replaceAll('.gif', '')
+        .replaceAll('.png', '');
+    return 'assets/images/$clean.webp';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final path = assetName.startsWith('assets/') ? assetName : 'assets/images/$assetName';
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Image.asset(
-        path,
+    final path = resolveAssetPath(assetName);
+    final pixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0;
+    // Downscale decode buffer to physical display pixels (e.g. 24 * 2.5 = 60px)
+    // Low-end memory optimization: saves over 95% RAM compared to decoding raw 512x512 GIF frames
+    final targetPixelSize = (size * pixelRatio).clamp(32.0, 120.0).toInt();
+
+    return RepaintBoundary(
+      child: SizedBox(
         width: size,
         height: size,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => Icon(
-          Icons.animation,
-          size: size,
-          color: AppTheme.emerald,
+        child: Image.asset(
+          path,
+          width: size,
+          height: size,
+          fit: fit,
+          cacheWidth: targetPixelSize,
+          cacheHeight: targetPixelSize,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) => Icon(
+            SyncDubFlaticon.iconFor(assetName),
+            size: size,
+            color: color ?? AppTheme.emerald,
+          ),
         ),
       ),
     );

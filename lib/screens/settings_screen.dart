@@ -36,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const SyncDubFlaticon(assetName: 'anim_settings.gif', size: 22),
+                  const SyncDubFlaticon(assetName: 'anim_settings.webp', size: 22),
                   const SizedBox(width: 8),
                   Text(
                     'Settings',
@@ -49,38 +49,37 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              Row(
-                children: [
-                  // Quick Theme Toggle Button in Header
-                  IconButton(
-                    icon: Icon(
-                      isDark ? Iconsax.sun_1 : Iconsax.moon,
-                      size: 20,
-                      color: fg,
-                    ),
-                    tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-                    onPressed: () => state.toggleTheme(),
+              // Theme Toggle Button in Top-Right Corner
+              InkWell(
+                onTap: () => state.toggleTheme(),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: sf2,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: bd),
                   ),
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: () => state.goScreen(3),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppTheme.emeraldDim,
-                        borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isDark ? Iconsax.sun_1 : Iconsax.moon,
+                        size: 16,
+                        color: isDark ? const Color(0xFFF59E0B) : const Color(0xFF6366F1),
                       ),
-                      child: const Text(
-                        'Dashboard',
+                      const SizedBox(width: 6),
+                      Text(
+                        isDark ? 'Light Mode' : 'Dark Mode',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.emerald,
+                          color: fg,
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -105,7 +104,7 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       // Input / Capture Source (YouTube / Reels vs Mic)
                       _buildRow(
-                        gifAsset: 'anim_soundwave.gif',
+                        gifAsset: 'anim_soundwave.webp',
                         iconBg: sf2,
                         iconColor: AppTheme.emerald,
                         name: 'Capture Audio Source',
@@ -122,7 +121,7 @@ class SettingsScreen extends StatelessWidget {
                       Divider(height: 1, color: bd),
                       // Output Device (Fetches from physical phone in real-time)
                       _buildRow(
-                        gifAsset: 'anim_speaker.gif',
+                        gifAsset: 'anim_speaker.webp',
                         iconBg: sf2,
                         iconColor: AppTheme.emerald,
                         name: 'Output Device',
@@ -150,7 +149,7 @@ class SettingsScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       _buildRow(
-                        gifAsset: 'anim_translate.gif',
+                        gifAsset: 'anim_translate.webp',
                         iconBg: sf2,
                         iconColor: AppTheme.emerald,
                         name: 'Default Target Language',
@@ -197,7 +196,7 @@ class SettingsScreen extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               alignment: Alignment.center,
-                              child: const SyncDubFlaticon(assetName: 'anim_soundwave.gif', size: 20),
+                              child: const SyncDubFlaticon(assetName: 'anim_soundwave.webp', size: 20),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -214,7 +213,7 @@ class SettingsScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 1),
                                   Text(
-                                    'Overlay icon on other apps, docks after 30s',
+                                    'Floating bubble over other apps, tucks into the edge after 4s',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: fg3,
@@ -231,24 +230,6 @@ class SettingsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Divider(height: 1, thickness: 1, color: bd),
-
-                      // PiP Overlay & Docking Configuration Screen Link
-                      _buildRow(
-                        gifAsset: 'anim_soundwave.gif',
-                        iconBg: sf2,
-                        iconColor: const Color(0xFF0284C7),
-                        name: 'PiP Overlay & Compatible Apps',
-                        sub: 'Size: ${state.overlaySize} · Dock: ${state.overlaySnapPosition}',
-                        val: 'Configure',
-                        valColor: const Color(0xFF0284C7),
-                        hasArrow: true,
-                        fg: fg,
-                        fg3: fg3,
-                        bd: bd,
-                        onTap: () => state.goScreen(4), // Screen 4: PipOverlayScreen
-                      ),
-
                       Divider(height: 1, thickness: 1, color: bd),
 
                       // Theme Toggle Row
@@ -307,6 +288,67 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
+                // Smart Playback & Voice Sync Section
+                _buildSectionHeader('Smart Playback & Voice Sync', fg3),
+                Container(
+                  decoration: BoxDecoration(
+                    color: sf,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: bd),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => state.toggleAutoPauseOnSilence(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: sf2,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            alignment: Alignment.center,
+                            child: const SyncDubFlaticon(assetName: 'anim_soundwave.webp', size: 18),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Auto-Pause on Video Silence',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: fg,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  'Pauses dubbing when video stops or speaker is silent (>1.8s)',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: fg3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: state.isAutoPauseOnSilenceEnabled,
+                            activeThumbColor: AppTheme.emerald,
+                            onChanged: (_) => state.toggleAutoPauseOnSilence(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // 5. Subscription Section
                 _buildSectionHeader('Subscription & Real-Time Balance', fg3),
                 Container(
@@ -316,7 +358,7 @@ class SettingsScreen extends StatelessWidget {
                     border: Border.all(color: bd),
                   ),
                   child: _buildRow(
-                    gifAsset: 'anim_rocket.gif',
+                    gifAsset: 'anim_rocket.webp',
                     iconBg: AppTheme.amber.withValues(alpha: 0.12),
                     iconColor: AppTheme.amber,
                     name: 'Live Dubbing Quota',
@@ -345,7 +387,7 @@ class SettingsScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       _buildRow(
-                        gifAsset: 'anim_shield.gif',
+                        gifAsset: 'anim_shield.webp',
                         iconBg: sf2,
                         iconColor: AppTheme.emerald,
                         name: 'Privacy Policy',
@@ -363,7 +405,7 @@ class SettingsScreen extends StatelessWidget {
                         child: Row(
                           children: [
                             Image.asset(
-                              'assets/images/app_icon.png',
+                              'assets/images/app_icon.webp',
                               width: 28,
                               height: 28,
                               fit: BoxFit.contain,
@@ -383,25 +425,10 @@ class SettingsScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 1),
                                   Text(
-                                    'v2.5.0 (Production Build)',
+                                    'v2.7.0',
                                     style: TextStyle(fontSize: 11, color: fg3),
                                   ),
                                 ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: AppTheme.emeraldDim,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'Latest',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.emerald,
-                                ),
                               ),
                             ),
                           ],
@@ -459,7 +486,7 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  const SyncDubFlaticon(assetName: 'anim_soundwave.gif', size: 22),
+                  const SyncDubFlaticon(assetName: 'anim_soundwave.webp', size: 22),
                   const SizedBox(width: 8),
                   Text(
                     'Audio Capture Source',
@@ -625,6 +652,7 @@ class SettingsScreen extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: sf,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -678,7 +706,10 @@ class SettingsScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 12, color: fg3),
                     ),
                     const SizedBox(height: 16),
-                    ...devices.map((dev) {
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: devices.map((dev) {
                       final isSelected = dev.id == current.id || dev.name == current.name;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
@@ -730,7 +761,9 @@ class SettingsScreen extends StatelessWidget {
                           },
                         ),
                       );
-                    }),
+                    }).toList(),
+                      ),
+                    ),
                   ],
                 ),
               ),

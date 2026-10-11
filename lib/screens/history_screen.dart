@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+
 import '../models/translation_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/motion_icon.dart';
@@ -11,6 +12,16 @@ class HistoryScreen extends StatelessWidget {
     super.key,
     required this.state,
   });
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,14 +49,14 @@ class HistoryScreen extends StatelessWidget {
               Row(
                 children: [
                   Image.asset(
-                    'assets/images/app_icon.png',
+                    'assets/images/app_icon.webp',
                     width: 28,
                     height: 28,
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'Session History',
+                    'Dubbing History',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
@@ -68,7 +79,7 @@ class HistoryScreen extends StatelessWidget {
                     const Icon(Iconsax.clock, size: 12, color: AppTheme.emerald),
                     const SizedBox(width: 5),
                     Text(
-                      '${sessions.length} sessions',
+                      '${sessions.length} ${sessions.length == 1 ? 'session' : 'sessions'}',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -96,7 +107,7 @@ class HistoryScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${sessions.length} sessions recorded',
+                        '${sessions.length} dubbing ${sessions.length == 1 ? 'session' : 'sessions'} saved',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -177,24 +188,26 @@ class HistoryScreen extends StatelessWidget {
                           ),
                           alignment: Alignment.center,
                           child: const SyncDubFlaticon(
-                            assetName: 'anim_history.gif',
+                            assetName: 'anim_history.webp',
                             size: 36,
                           ),
                         ),
                         const SizedBox(height: 14),
                         Text(
-                          'No Sessions Yet',
+                          'No Translation History Yet',
                           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fg),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Start live dubbing to automatically record real-time translation session logs here.',
+                          'Start live dubbing in Floating Mode or In-App to build your personal translation history.',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 12, color: fg2, height: 1.4),
                         ),
                         const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => state.goScreen(3),
+                        ElevatedButton.icon(
+                          onPressed: () => state.goScreen(3), // Open Home
+                          icon: const Icon(Iconsax.translate, size: 16),
+                          label: const Text('Start Live Translation'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.emerald,
                             foregroundColor: Colors.white,
@@ -202,117 +215,33 @@ class HistoryScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text('Start Live Dubbing'),
                         ),
                       ],
                     ),
                   )
                 else
-                  Container(
-                    decoration: BoxDecoration(
-                      color: sf,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: bd),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: sessions.length,
-                      separatorBuilder: (context, index) => Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: bd.withValues(alpha: 0.6),
-                      ),
-                      itemBuilder: (context, index) {
-                        final s = sessions[index];
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: sessions.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final s = sessions[index];
+                      final thumbUrl = s.effectiveThumbnailUrl;
 
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: Row(
-                            children: [
-                              // Badge icon
-                              Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  color: sf2,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: bd),
-                                ),
-                                alignment: Alignment.center,
-                                child: const SyncDubFlaticon(
-                                  assetName: 'anim_soundwave.gif',
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-
-                              // Title & Meta
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      s.title,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: fg,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      s.meta,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: fg3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-
-                              // Duration
-                              Text(
-                                s.dur,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: fg2,
-                                  fontFeatures: const [FontFeature.tabularFigures()],
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-
-                              // Dubbed status badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.emeraldDim,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Iconsax.tick_circle, size: 11, color: AppTheme.emerald),
-                                    SizedBox(width: 3),
-                                    Text(
-                                      'Dubbed',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppTheme.emerald,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                      return _buildHistoryVideoCard(
+                        context: context,
+                        session: s,
+                        thumbUrl: thumbUrl,
+                        timeAgo: _formatTimeAgo(s.timestamp),
+                        sf: sf,
+                        sf2: sf2,
+                        bd: bd,
+                        fg: fg,
+                        fg2: fg2,
+                        fg3: fg3,
+                      );
+                    },
                   ),
 
                 const SizedBox(height: 24),
@@ -323,4 +252,162 @@ class HistoryScreen extends StatelessWidget {
       ],
     );
   }
+
+  /// Modern video card representation: 16:9 thumbnail + duration pill + title + platform badge + dub info + 3-dot menu
+  Widget _buildHistoryVideoCard({
+    required BuildContext context,
+    required HistorySession session,
+    required String? thumbUrl,
+    required String timeAgo,
+    required Color sf,
+    required Color sf2,
+    required Color bd,
+    required Color fg,
+    required Color fg2,
+    required Color fg3,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: sf,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: bd),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+              // 1. Video Thumbnail (16:9 ratio, rounded corners) with duration badge
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 114,
+                      height: 64,
+                      child: thumbUrl != null
+                          ? Image.network(
+                              thumbUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, error, stack) => Container(
+                                color: sf2,
+                                child: const Center(
+                                  child: Icon(Iconsax.video_play, color: AppTheme.emerald, size: 28),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: sf2,
+                              child: const Center(
+                                child: Icon(Iconsax.video_play, color: AppTheme.emerald, size: 26),
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  // Duration pill on bottom right
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        session.dur,
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+
+              // 2. Video Title, Platform Badge, Dubbed Language, and Timestamp
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      session.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: fg,
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Platform & Dubbing Meta Row
+                    Row(
+                      children: [
+                        // Platform logo badge
+                        if (session.platform != null && session.platform!.isNotEmpty) ...[
+                          Text(
+                            session.platform!,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.emerald,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text('•', style: TextStyle(fontSize: 10, color: fg3)),
+                          const SizedBox(width: 5),
+                        ],
+
+                        // Dubbed info
+                        Flexible(
+                          child: Text(
+                            session.targetLang != null
+                                ? 'Dubbed in ${session.targetLang}'
+                                : (session.meta.contains('Dubbed') ? session.meta : 'Live Dubbing'),
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.emerald,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+
+                    // Relative Time
+                    Text(
+                      timeAgo,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: fg3,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 }

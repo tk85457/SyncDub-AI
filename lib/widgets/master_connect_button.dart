@@ -35,13 +35,39 @@ class _MasterConnectButtonState extends State<MasterConnectButton>
     _eqController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    )..repeat();
+    );
 
     // Subtle breathing pulse for live state
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    );
+
+    _syncAnimationState();
+  }
+
+  void _syncAnimationState() {
+    final isConnecting = widget.state.isConnecting || widget.state.isSwitchingLanguage;
+    final isLive = widget.state.isTranslating && !widget.state.isSwitchingLanguage && !widget.state.isConnecting;
+    if (isConnecting || isLive) {
+      if (!_eqController.isAnimating) _eqController.repeat();
+      if (!_pulseController.isAnimating) _pulseController.repeat(reverse: true);
+    } else {
+      if (_eqController.isAnimating) {
+        _eqController.stop();
+        _eqController.value = 0.0;
+      }
+      if (_pulseController.isAnimating) {
+        _pulseController.stop();
+        _pulseController.value = 0.0;
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MasterConnectButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimationState();
   }
 
   @override
@@ -53,8 +79,8 @@ class _MasterConnectButtonState extends State<MasterConnectButton>
 
   @override
   Widget build(BuildContext context) {
-    final isLive = widget.state.isTranslating;
-    final isConnecting = widget.state.isConnecting;
+    final isConnecting = widget.state.isConnecting || widget.state.isSwitchingLanguage;
+    final isLive = widget.state.isTranslating && !widget.state.isSwitchingLanguage && !widget.state.isConnecting;
     final isPaused = widget.state.isPaused;
 
     return Column(
@@ -70,7 +96,20 @@ class _MasterConnectButtonState extends State<MasterConnectButton>
             final Gradient bgGradient;
             final List<BoxShadow> shadows;
 
-            if (isLive) {
+            if (isConnecting) {
+              bgGradient = const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
+              );
+              shadows = [
+                BoxShadow(
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.35 + (0.18 * pulseVal)),
+                  blurRadius: 16 + (8 * pulseVal),
+                  spreadRadius: 1 + (2 * pulseVal),
+                ),
+              ];
+            } else if (isLive) {
               bgGradient = const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -81,19 +120,6 @@ class _MasterConnectButtonState extends State<MasterConnectButton>
                   color: const Color(0xFFEF4444).withValues(alpha: 0.35 + (0.18 * pulseVal)),
                   blurRadius: 16 + (8 * pulseVal),
                   spreadRadius: 1 + (2 * pulseVal),
-                ),
-              ];
-            } else if (isConnecting) {
-              bgGradient = const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
-              );
-              shadows = [
-                BoxShadow(
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.40),
-                  blurRadius: 16,
-                  spreadRadius: 1,
                 ),
               ];
             } else {
@@ -144,22 +170,25 @@ class _MasterConnectButtonState extends State<MasterConnectButton>
                             color: Colors.white,
                           ),
                           const SizedBox(width: 12),
-                          const Flexible(
+                          Flexible(
                             child: Text(
-                              'Connecting to SyncDub AI… (Tap to Cancel)',
-                              style: TextStyle(
-                                fontSize: 14,
+                              widget.state.isSwitchingLanguage
+                                  ? 'Reconnecting to ${widget.state.targetLanguage.name}…'
+                                  : 'Connecting… (Tap to Stop)',
+                              style: const TextStyle(
+                                fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white,
-                                letterSpacing: 0.2,
+                                letterSpacing: -0.2,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ] else if (isLive) ...[
                           const SyncDubFlaticon(
-                            assetName: 'anim_soundwave.gif',
+                            assetName: 'anim_soundwave.webp',
                             size: 22,
+                            color: Colors.white,
                           ),
                           const SizedBox(width: 10),
                           Text(
@@ -185,8 +214,9 @@ class _MasterConnectButtonState extends State<MasterConnectButton>
                           ),
                         ] else ...[
                           const SyncDubFlaticon(
-                            assetName: 'anim_soundwave.gif',
+                            assetName: 'anim_soundwave.webp',
                             size: 22,
+                            color: Colors.white,
                           ),
                           const SizedBox(width: 10),
                           const Text(
@@ -239,12 +269,17 @@ class _MasterConnectButtonState extends State<MasterConnectButton>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     SyncDubFlaticon(
-                      assetName: isPaused ? 'anim_soundwave.gif' : 'anim_speed.gif',
+                      assetName: isPaused ? 'anim_soundwave.webp' : 'anim_speed.webp',
                       size: 20,
+                      color: Colors.white,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      isPaused ? 'Resume Translation' : 'Pause Translation',
+                      widget.state.isAutoPaused
+                          ? 'Silence Paused · Resume'
+                          : isPaused
+                              ? 'Resume Translation'
+                              : 'Pause Translation',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

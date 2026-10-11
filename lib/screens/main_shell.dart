@@ -14,13 +14,38 @@ import 'profile_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/motion_icon.dart';
 
-class MainShell extends StatelessWidget {
+class MainShell extends StatefulWidget {
   final TranslationState state;
 
   const MainShell({
     super.key,
     required this.state,
   });
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed) {
+      widget.state.refreshOutputDevices();
+      widget.state.wakeBackend();
+    }
+  }
 
   Future<bool?> _showExitDialog(BuildContext context, TranslationState state) {
     final isDark = state.isDarkMode;
@@ -34,7 +59,7 @@ class MainShell extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
-              const SyncDubFlaticon(assetName: 'anim_rocket.gif', size: 26),
+              const SyncDubFlaticon(assetName: 'anim_rocket.webp', size: 26),
               const SizedBox(width: 10),
               Text(
                 'Exit SyncDub AI?',
@@ -92,12 +117,12 @@ class MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: state,
+      listenable: widget.state,
       builder: (context, _) {
+        final state = widget.state;
         final isDark = state.isDarkMode;
         final bg = AppTheme.bg(isDark);
         final bd = AppTheme.border(isDark);
-        final activeError = state.activeError;
 
         Widget currentScreen;
         // BINA LOGIN KE USER APP NA KHOL PAAYE: Strict Authentication Enforcement
@@ -151,6 +176,7 @@ class MainShell extends StatelessWidget {
           child: Scaffold(
             backgroundColor: bg,
             body: SafeArea(
+              top: state.currentScreen != 1,
               bottom: false,
               child: Stack(
                 children: [
@@ -174,82 +200,9 @@ class MainShell extends StatelessWidget {
                       _buildBottomNav(state, isDark, bd),
                   ],
                 ),
-
-                // Global Enterprise Sanitized Error Banner
-                if (activeError != null && state.currentScreen != 0)
-                  Positioned(
-                    top: 12,
-                    left: 16,
-                    right: 16,
-                    child: Material(
-                      elevation: 8,
-                      borderRadius: BorderRadius.circular(16),
-                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.only(top: 2),
-                              child: Icon(Iconsax.warning_2, color: AppTheme.danger, size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    activeError.title,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.danger,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    activeError.reason,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            InkWell(
-                              onTap: () => state.clearActiveError(),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: Icon(
-                                  Iconsax.close_circle,
-                                  size: 16,
-                                  color: isDark ? Colors.white60 : Colors.black45,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
+
           ),
         ),
       );
@@ -274,7 +227,7 @@ class MainShell extends StatelessWidget {
         children: [
           _buildNavItem(
             icon: Iconsax.home_2,
-            gifAsset: 'anim_home.gif',
+            gifAsset: 'anim_home.webp',
             label: 'Home',
             isSelected: state.currentScreen == 3,
             fg: fg,
@@ -283,7 +236,7 @@ class MainShell extends StatelessWidget {
           ),
           _buildNavItem(
             icon: Iconsax.clock,
-            gifAsset: 'anim_history.gif',
+            gifAsset: 'anim_history.webp',
             label: 'History',
             isSelected: state.currentScreen == 7,
             fg: fg,
@@ -292,7 +245,7 @@ class MainShell extends StatelessWidget {
           ),
           _buildNavItem(
             icon: Iconsax.user,
-            gifAsset: 'anim_user.gif',
+            gifAsset: 'anim_user.webp',
             label: 'Profile',
             isSelected: state.currentScreen == 5,
             fg: fg,
@@ -301,7 +254,7 @@ class MainShell extends StatelessWidget {
           ),
           _buildNavItem(
             icon: Iconsax.setting_2,
-            gifAsset: 'anim_settings.gif',
+            gifAsset: 'anim_settings.webp',
             label: 'Settings',
             isSelected: state.currentScreen == 8,
             fg: fg,

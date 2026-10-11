@@ -36,118 +36,124 @@ class HomeScreen extends StatelessWidget {
     final connecting = state.isConnecting;
     final lang = state.targetLanguage;
 
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Top App Header with App Icon and Theme Toggle Button
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: bd)),
-            ),
-            child: Row(
-              children: [
-                Image.asset(
-                  'assets/images/app_icon.png',
-                  width: 32,
-                  height: 32,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'SyncDub AI',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                        color: fg,
-                      ),
-                    ),
-                    Text(
-                      'Real-Time Live Translation',
-                      style: TextStyle(fontSize: 10, color: fg3),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                // Real-Time Minutes Chip (Top Header Badge - tap opens Profile & Quota)
-                InkWell(
-                  onTap: () {
-                    state.triggerHaptic();
-                    state.goScreen(5); // Open Profile & Quota screen
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: AppTheme.emeraldDim,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.35)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Iconsax.timer_1,
-                          size: 16,
-                          color: AppTheme.emerald,
-                        ),
-                        const SizedBox(width: 6),
-                        if (!state.isCreditsLoaded)
-                          const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppTheme.emerald,
-                            ),
-                          )
-                        else
-                          Text(
-                            '${state.creditsRemaining.toStringAsFixed(0)} min',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.emerald,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                      ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Top App Header with App Icon and Theme Toggle Button (PINNED AT THE TOP ON ALL PHONES)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color: sf,
+            border: Border(bottom: BorderSide(color: bd)),
+          ),
+          child: Row(
+            children: [
+              Image.asset(
+                'assets/images/app_icon.webp',
+                width: 32,
+                height: 32,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SyncDub AI',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                      color: fg,
                     ),
                   ),
+                  Text(
+                    'Real-Time Live Translation',
+                    style: TextStyle(fontSize: 10, color: fg3),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              // Real-Time Minutes Chip (Top Header Badge - tap opens Profile & Quota)
+              InkWell(
+                onTap: () {
+                  state.triggerHaptic();
+                  state.goScreen(5); // Open Profile & Quota screen
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.emeraldDim,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Iconsax.timer_1,
+                        size: 15,
+                        color: AppTheme.emerald,
+                      ),
+                      const SizedBox(width: 6),
+                      if (!state.isCreditsLoaded)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppTheme.emerald,
+                          ),
+                        )
+                      else
+                        Text(
+                          '${state.creditsRemaining.toStringAsFixed(0)} min',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.emerald,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
 
-          // 3. Translation Pipeline Language Card
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: sf,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: bd),
-            ),
+        // Scrollable content below pinned header
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Image.asset(
-                      'assets/images/app_icon.png',
-                      width: 18,
-                      height: 18,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'TRANSLATION PIPELINE',
+                // 2. Translation Pipeline Language Card
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: sf,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: bd),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/app_icon.webp',
+                            width: 18,
+                            height: 18,
+                            fit: BoxFit.contain,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'TRANSLATION PIPELINE',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -207,7 +213,7 @@ class HomeScreen extends StatelessWidget {
                             const SizedBox(height: 2),
                             Row(
                               children: [
-                                const SyncDubFlaticon(assetName: 'anim_translate.gif', size: 20),
+                                const SyncDubFlaticon(assetName: 'anim_translate.webp', size: 20),
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Column(
@@ -292,15 +298,26 @@ class HomeScreen extends StatelessWidget {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        Text(
-                                          lang.abbr,
-                                          style: TextStyle(fontSize: 10, color: fg2),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(Iconsax.arrow_down_1, size: 12, color: fg3),
-                                ],
+                                         Text(
+                                           state.isSwitchingLanguage ? 'Reconnecting…' : lang.abbr,
+                                           style: TextStyle(
+                                             fontSize: 10,
+                                             color: state.isSwitchingLanguage ? AppTheme.emerald : fg2,
+                                             fontWeight: state.isSwitchingLanguage ? FontWeight.w700 : FontWeight.w500,
+                                           ),
+                                         ),
+                                       ],
+                                     ),
+                                   ),
+                                   if (state.isSwitchingLanguage)
+                                     const SizedBox(
+                                       width: 12,
+                                       height: 12,
+                                       child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.emerald),
+                                     )
+                                   else
+                                     Icon(Iconsax.arrow_down_1, size: 12, color: fg3),
+                                 ],
                               ),
                             ],
                           ),
@@ -316,9 +333,9 @@ class HomeScreen extends StatelessWidget {
           // 4. In-Box Contextual Error Card (Handles Mic Error and Offline without separate screen)
           if (state.activeError != null) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
                   color: state.activeError!.type == AppErrorType.microphone
                       ? AppTheme.amber.withValues(alpha: 0.10)
@@ -421,14 +438,14 @@ class HomeScreen extends StatelessWidget {
 
           // 5. Authentic Chrome Extension Waveform Master Connect Button
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: MasterConnectButton(state: state),
           ),
 
           // 5. Authentic Live Audio Waveform (Chrome Extension Multi-Harmonic Wave)
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
               color: sf,
               borderRadius: BorderRadius.circular(16),
@@ -443,7 +460,7 @@ class HomeScreen extends StatelessWidget {
                     Row(
                       children: [
                         Image.asset(
-                          'assets/images/app_icon.png',
+                          'assets/images/app_icon.webp',
                           width: 18,
                           height: 18,
                           fit: BoxFit.contain,
@@ -464,7 +481,11 @@ class HomeScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (state.isPaused)
-                          const Icon(Iconsax.pause, size: 10, color: AppTheme.amber)
+                          const Icon(
+                            Iconsax.pause,
+                            size: 10,
+                            color: AppTheme.amber,
+                          )
                         else if (dub)
                           SyncDubLiveSoundWaveIcon(height: 10, color: AppTheme.emerald)
                         else if (connecting)
@@ -473,13 +494,15 @@ class HomeScreen extends StatelessWidget {
                           const Icon(Iconsax.minus, size: 10),
                         const SizedBox(width: 4),
                         Text(
-                          state.isPaused
-                              ? 'PAUSED'
-                              : dub
-                                  ? (state.isInternalAudioActive ? 'VIDEO AUDIO LIVE' : 'MIC STREAM LIVE')
-                                  : connecting
-                                      ? 'CONNECTING…'
-                                      : 'Standby',
+                          state.isAutoPaused
+                              ? 'SILENCE · PAUSED'
+                              : state.isPaused
+                                  ? 'PAUSED'
+                                  : dub
+                                      ? (state.isInternalAudioActive ? 'VIDEO AUDIO LIVE' : 'MIC STREAM LIVE')
+                                      : connecting
+                                          ? 'CONNECTING…'
+                                          : 'Standby',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
@@ -505,74 +528,14 @@ class HomeScreen extends StatelessWidget {
                   isPaused: state.isPaused,
                   height: 48,
                 ),
-
-                const SizedBox(height: 10),
-                if (dub) ...[
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ORIGINAL AUDIO',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.8,
-                          color: fg3,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        state.liveOriginalText,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: fg,
-                          height: 1.4,
-                        ),
-                      ),
-                      Divider(color: bd, height: 16),
-                      Text(
-                        'DUBBED STREAM · ${lang.name.toUpperCase()}',
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.8,
-                          color: AppTheme.emerald,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        state.liveDubbedText,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.emerald,
-                          fontWeight: FontWeight.w500,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        'Tap Start Live Dubbing to monitor stream',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: fg3,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
 
-          // 6. Audio Ducking & Volume Sliders (Real-time volume control)
+          // 6. Audio Balance & Volume Sliders (Real-time volume control)
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
               color: sf,
               borderRadius: BorderRadius.circular(16),
@@ -582,7 +545,7 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AUDIO DUCKING & BALANCE',
+                  'AUDIO BALANCE & VOLUME',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -594,62 +557,173 @@ class HomeScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            state.originalVolume <= 0.05
+                                ? Iconsax.volume_cross
+                                : (state.originalVolume < 0.60
+                                    ? Iconsax.volume_low_1
+                                    : Iconsax.volume_high),
+                            size: 16,
+                            color: state.originalVolume <= 0.05
+                                ? AppTheme.danger
+                                : (state.originalVolume < 0.60
+                                    ? AppTheme.amber
+                                    : AppTheme.emerald),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Original Video Audio',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Iconsax.volume_low_1, size: 16, color: fg3),
+                        Text(
+                          '${(state.originalVolume * 100).toInt()}%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: state.originalVolume <= 0.05
+                                ? AppTheme.danger
+                                : (state.originalVolume < 0.60
+                                    ? AppTheme.amber
+                                    : AppTheme.emerald),
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        Text('Original Audio Volume', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (state.originalVolume <= 0.05
+                                    ? AppTheme.danger
+                                    : (state.originalVolume < 0.60
+                                        ? AppTheme.amber
+                                        : AppTheme.emerald))
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: (state.originalVolume <= 0.05
+                                      ? AppTheme.danger
+                                      : (state.originalVolume < 0.60
+                                          ? AppTheme.amber
+                                          : AppTheme.emerald))
+                                  .withValues(alpha: 0.3),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            state.originalVolume <= 0.05
+                                ? 'Off (0%)'
+                                : (state.originalVolume < 0.60
+                                    ? 'Ducked (~20%)'
+                                    : 'Full (100%)'),
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                              color: state.originalVolume <= 0.05
+                                  ? AppTheme.danger
+                                  : (state.originalVolume < 0.60
+                                      ? AppTheme.amber
+                                      : AppTheme.emerald),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    Text('${(state.originalVolume * 100).toInt()}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg2)),
                   ],
                 ),
                 SliderTheme(
                   data: SliderThemeData(
                     trackHeight: 4,
-                    activeTrackColor: fg,
+                    activeTrackColor: state.originalVolume <= 0.05
+                        ? AppTheme.danger
+                        : (state.originalVolume < 0.60
+                            ? AppTheme.amber
+                            : AppTheme.emerald),
                     inactiveTrackColor: bd,
                     thumbColor: Colors.white,
                     thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
                     overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
                   ),
                   child: Slider(
-                    value: state.originalVolume,
+                    value: state.originalVolume.clamp(0.0, 1.0),
+                    min: 0.0,
+                    max: 1.0,
                     onChanged: (v) => state.setOriginalVolume(v),
+                    onChangeEnd: (v) => state.persistOriginalVolume(v),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Auto-Duck to 15%', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg)),
-                          const SizedBox(height: 2),
-                          Text('Automatically lowers video audio when dub plays', style: TextStyle(fontSize: 11, color: fg3)),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: state.isAutoDuckEnabled,
-                      activeThumbColor: AppTheme.emerald,
-                      onChanged: (_) => state.toggleAutoDuck(),
-                    ),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.only(top: 1, bottom: 2),
+                  child: Text(
+                    state.originalVolume <= 0.05
+                        ? '0% - 5%: Original video audio is off so dubbed voice is heard alone.'
+                        : (state.originalVolume < 0.60
+                            ? '5% - 60%: Active video audio is ducked to background (~20%) so dubbed voice is clear.'
+                            : '60% - 100%: Original video plays at full volume alongside dubbed voice.'),
+                    style: TextStyle(fontSize: 10.5, color: fg3, height: 1.25),
+                  ),
                 ),
                 Divider(color: bd, height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Iconsax.volume_high, size: 16, color: AppTheme.emerald),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Dubbed Voice Volume',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Iconsax.volume_high, size: 16, color: AppTheme.emerald),
+                        Text('${(state.dubbedVolume * 100).toInt()}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.emerald)),
                         const SizedBox(width: 6),
-                        Text('Dubbed Voice Volume', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: state.dubbedVolume == 0.0
+                                ? AppTheme.danger.withValues(alpha: 0.12)
+                                : AppTheme.emerald.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: state.dubbedVolume == 0.0
+                                  ? AppTheme.danger.withValues(alpha: 0.3)
+                                  : AppTheme.emerald.withValues(alpha: 0.3),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            state.dubbedVolume == 0.0 ? 'Muted' : 'Real-Time',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                              color: state.dubbedVolume == 0.0 ? AppTheme.danger : AppTheme.emerald,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    Text('${(state.dubbedVolume * 100).toInt()}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.emerald)),
                   ],
                 ),
                 SliderTheme(
@@ -662,17 +736,30 @@ class HomeScreen extends StatelessWidget {
                     overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
                   ),
                   child: Slider(
-                    value: state.dubbedVolume,
+                    value: state.dubbedVolume.clamp(0.0, 1.0),
+                    min: 0.0,
+                    max: 1.0,
                     onChanged: (v) => state.setDubbedVolume(v),
+                    onChangeEnd: (v) => state.persistDubbedVolume(v),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 1, bottom: 2),
+                  child: Text(
+                    'Changes the dubbed voice loudness instantly, even while it is speaking.',
+                    style: TextStyle(fontSize: 10, color: fg3, height: 1.25),
                   ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 90),
+          const SizedBox(height: 60),
         ],
       ),
-    );
+    ),
+  ),
+],
+);
   }
 }

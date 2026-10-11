@@ -8,16 +8,22 @@ class FloatingOverlayManager {
   static VoidCallback? _onPauseResumeCallback;
   static VoidCallback? _onCloseCallback;
   static VoidCallback? _onLanguageCycleCallback;
+  static ValueChanged<String>? _onLanguageSelectedCallback;
+  static VoidCallback? _onStopDubbingCallback;
   static bool _initialized = false;
 
   static void initialize({
     required VoidCallback onPauseResume,
     required VoidCallback onClose,
     VoidCallback? onLanguageCycle,
+    ValueChanged<String>? onLanguageSelected,
+    VoidCallback? onStopDubbing,
   }) {
     _onPauseResumeCallback = onPauseResume;
     _onCloseCallback = onClose;
     _onLanguageCycleCallback = onLanguageCycle;
+    _onLanguageSelectedCallback = onLanguageSelected;
+    _onStopDubbingCallback = onStopDubbing;
 
     if (!_initialized) {
       _channel.setMethodCallHandler((call) async {
@@ -30,6 +36,15 @@ class FloatingOverlayManager {
             break;
           case 'onLanguageCycleRequested':
             _onLanguageCycleCallback?.call();
+            break;
+          case 'onStopDubbingRequested':
+            _onStopDubbingCallback?.call();
+            break;
+          case 'onLanguageSelectedFromOverlay':
+            final code = call.arguments?['code']?.toString();
+            if (code != null) {
+              _onLanguageSelectedCallback?.call(code);
+            }
             break;
         }
       });
@@ -62,6 +77,8 @@ class FloatingOverlayManager {
     bool isTranslating = false,
     bool isPaused = false,
     String targetLang = 'HI',
+    String targetLangFlag = '🇮🇳',
+    String targetLangName = 'Hindi',
   }) async {
     try {
       final hasPerm = await checkPermission();
@@ -73,6 +90,8 @@ class FloatingOverlayManager {
         'isTranslating': isTranslating,
         'isPaused': isPaused,
         'targetLang': targetLang,
+        'targetLangFlag': targetLangFlag,
+        'targetLangName': targetLangName,
       });
     } catch (_) {}
   }
@@ -82,13 +101,32 @@ class FloatingOverlayManager {
     bool isTranslating = false,
     bool isPaused = false,
     String targetLang = 'HI',
+    String targetLangFlag = '🇮🇳',
+    String targetLangName = 'Hindi',
   }) async {
     try {
       await _channel.invokeMethod('updateOverlay', {
         'isTranslating': isTranslating,
         'isPaused': isPaused,
         'targetLang': targetLang,
+        'targetLangFlag': targetLangFlag,
+        'targetLangName': targetLangName,
       });
+    } catch (_) {}
+  }
+
+  /// Makes sure the foreground service (mic / media-projection keep-alive) is running
+  /// even when the floating bubble itself is disabled by the user.
+  static Future<void> ensureForeground() async {
+    try {
+      await _channel.invokeMethod('ensureForeground');
+    } catch (_) {}
+  }
+
+  /// Removes only the floating bubble, the foreground service keeps running (live session active).
+  static Future<void> removeOverlayKeepService() async {
+    try {
+      await _channel.invokeMethod('removeOverlayKeepService');
     } catch (_) {}
   }
 

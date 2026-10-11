@@ -1,15 +1,66 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'models/translation_state.dart';
 import 'screens/main_shell.dart';
+import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/app_error_widget.dart';
 
-void main() {
+void main() async {
+  // 1. Ensure Flutter bindings are safely initialized
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SyncDubApp());
+
+  // 2. Install Global Flutter Framework Error Handler
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('[SyncDub Global Error] FlutterError caught: ${details.exceptionAsString()}');
+  };
+
+  // 3. Install Global Asynchronous Platform Error Handler (Dart / Platform Channels / Isolates)
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    debugPrint('[SyncDub Global Async Error] Caught: $error');
+    return true; // Mark as handled to prevent process abort
+  };
+
+  // 4. Install Custom ErrorWidget Builder (Zero Red/Grey Screen of Death)
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return AppErrorFallbackWidget(details: details);
+  };
+
+  // 5. Safe Startup Initialization with Fallbacks
+  bool hasCompletedOnboarding = false;
+  bool isAuthenticated = false;
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    hasCompletedOnboarding = prefs.getBool('hasCompletedOnboarding') ?? false;
+  } catch (e) {
+    debugPrint('[SyncDub Startup] SharedPreferences init error: $e');
+  }
+
+  try {
+    await AuthService().initialize();
+    isAuthenticated = AuthService().isAuthenticated;
+  } catch (e) {
+    debugPrint('[SyncDub Startup] AuthService init error: $e');
+  }
+
+  runApp(SyncDubApp(
+    initialHasCompletedOnboarding: hasCompletedOnboarding,
+    initialIsAuthenticated: isAuthenticated,
+  ));
 }
 
 class SyncDubApp extends StatefulWidget {
-  const SyncDubApp({super.key});
+  final bool initialHasCompletedOnboarding;
+  final bool initialIsAuthenticated;
+
+  const SyncDubApp({
+    super.key,
+    this.initialHasCompletedOnboarding = false,
+    this.initialIsAuthenticated = false,
+  });
 
   @override
   State<SyncDubApp> createState() => _SyncDubAppState();
@@ -21,7 +72,10 @@ class _SyncDubAppState extends State<SyncDubApp> {
   @override
   void initState() {
     super.initState();
-    _translationState = TranslationState();
+    _translationState = TranslationState(
+      initialHasCompletedOnboarding: widget.initialHasCompletedOnboarding,
+      initialIsAuthenticated: widget.initialIsAuthenticated,
+    );
   }
 
   bool _preloaded = false;
@@ -37,13 +91,8 @@ class _SyncDubAppState extends State<SyncDubApp> {
 
   void _preloadImages() {
     const images = [
-      'assets/images/app_icon.png',
-      'assets/images/google_logo.png',
-      'assets/images/anim_soundwave.gif',
-      'assets/images/anim_speed.gif',
-      'assets/images/anim_home.gif',
-      'assets/images/anim_history.gif',
-      'assets/images/anim_settings.gif',
+      'assets/images/app_icon.webp',
+      'assets/images/google_logo.webp',
     ];
     for (final path in images) {
       precacheImage(AssetImage(path), context).catchError((_) {});
@@ -58,15 +107,15 @@ class _SyncDubAppState extends State<SyncDubApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _translationState,
-      builder: (context, _) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _translationState.darkModeNotifier,
+      builder: (context, isDark, _) {
         return MaterialApp(
           title: 'SyncDub AI',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          themeMode: _translationState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
           home: MainShell(state: _translationState),
         );
       },

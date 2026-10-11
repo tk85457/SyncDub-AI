@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 
@@ -18,10 +18,13 @@ class SyncDubBackendConfig {
   static const String proxyWsUrl =
       'wss://syncdub-translator-backend-1-hncr.onrender.com';
   static const String fallbackWsUrl =
-      'wss://syncdub-translator-backend-1.onrender.com';
+      'wss://syncdub-translator-backend-1-hncr.onrender.com';
 
-  static const String defaultEmail = 'mobile_user@syncdub.live';
-  static const String defaultPassword = 'SyncDubApp2026!';
+  // ONE backend for the mobile app AND the Chrome extension (same host as the extension's
+  // PROXY_SERVER_URL), so both use the same Supabase project, the same profiles row and the
+  // same minutes balance.
+  // NOTE: no shared-account credentials and no Gemini API key live in the client.
+  // The Gemini key stays on the Render proxy; every user authenticates as themselves.
 }
 
 class BackendPlanInfo {
@@ -42,105 +45,105 @@ class SyncDubBackendService {
   SyncDubBackendService._internal();
 
   String? _cachedAccessToken;
+  String? get cachedAccessToken => _cachedAccessToken;
   WebSocketChannel? _wsChannel;
   StreamSubscription? _wsSubscription;
-  Timer? _latencyPingTimer;
-  int _lastPingTimestamp = 0;
+  int _speechTurnStartTimestamp = 0;
 
   bool _isConnected = false;
   bool get isConnected => _isConnected;
 
-  /// Pause live translation stream (matching Chrome extension VideoStateManager behavior)
-  void pauseLiveStream() {
-    if (_isConnected && _wsChannel != null) {
-      try {
-        _wsChannel!.sink.add(jsonEncode({'action': 'pause'}));
-      } catch (e) {
-        debugPrint('[BackendService] pauseLiveStream error: $e');
-      }
+  bool _isPaused = false;
+  bool get isPaused => _isPaused;
+
+  bool _isManualPaused = false;
+  bool get isManualPaused => _isManualPaused;
+  int _sessionGeneration = 0;
+
+  static const int _boundaryOutputSuppressMs = 350;
+  int _boundaryOutputSuppressUntilMs = 0;
+
+  /// Suppress late-arriving translated packets belonging to previous video segment / ad
+  void suppressBoundaryOutput(String reason, {int durationMs = _boundaryOutputSuppressMs}) {
+    final target = DateTime.now().millisecondsSinceEpoch + durationMs;
+    if (target > _boundaryOutputSuppressUntilMs) {
+      _boundaryOutputSuppressUntilMs = target;
     }
+    debugPrint('[BoundaryAudioGuard] Suppressing translated output for ${durationMs}ms ($reason)');
+  }
+
+  /// Pause live translation stream (immediately blocks audio input and flushes playback queues)
+  /// Matching Chrome extension: does not send manual activityEnd which conflicts with SyncDub AI Auto-VAD
+  void pauseLiveStream({bool stopPlayback = true}) {
+    _isPaused = true;
+    _isManualPaused = true;
+    _preAckChunks.clear(); // anything captured before the pause is stale: never send it after resume
+    suppressBoundaryOutput('pause requested');
+    if (stopPlayback) {
+      AudioPipelineService().stopPlayback();
+    } else {
+      AudioPipelineService().flushPlaybackQueue();
+    }
+    debugPrint('[BackendService] Live stream PAUSED (audio input blocked, output dropped, queues flushed, stopPlayback=$stopPlayback)');
   }
 
   /// Resume live translation stream
-  void resumeLiveStream() {
-    if (_isConnected && _wsChannel != null) {
-      try {
-        _wsChannel!.sink.add(jsonEncode({'action': 'resume'}));
-      } catch (e) {
-        debugPrint('[BackendService] resumeLiveStream error: $e');
-      }
+  /// Matching Chrome extension: resumes audio chunk streaming so SyncDub AI Auto-VAD detects speech onset
+  /// [guard]=true for hard boundaries (manual resume / seek): flush + drop stale output.
+  /// [guard]=false for silence auto-resume: nothing stale exists, so never drop the first translated syllables.
+  void resumeLiveStream({bool guard = true}) {
+    _isPaused = false;
+    _isManualPaused = false;
+    if (guard) {
+      suppressBoundaryOutput('resuming live dubbing');
+      AudioPipelineService().flushPlaybackQueue();
     }
+    debugPrint('[BackendService] Live stream RESUMED (audio streaming active, boundary guard engaged)');
   }
 
   /// Check if a JWT token has expired or is invalid
-  bool isJwtExpired(String token) {
+  bool isJwtExpired(String token, {Duration skew = const Duration(minutes: 2)}) {
     try {
       final parts = token.split('.');
       if (parts.length != 3) return true;
       final normalized = base64Url.normalize(parts[1]);
       final payloadString = utf8.decode(base64Url.decode(normalized));
       final payload = jsonDecode(payloadString) as Map<String, dynamic>;
-      final exp = payload['exp'] as int?;
+      final exp = (payload['exp'] as num?)?.toInt();
       if (exp == null) return true;
       final expDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-      return DateTime.now().isAfter(expDate.subtract(const Duration(minutes: 2)));
+      return DateTime.now().isAfter(expDate.subtract(skew));
     } catch (_) {
       return true;
     }
   }
 
-  /// Authenticate against Supabase to obtain a valid JWT access token
+  /// Returns the signed-in user's own JWT (refreshing it when it is about to expire).
+  ///
+  /// There is intentionally NO fallback to a shared account: the old fallback silently billed
+  /// dubbing minutes to a shared login whenever the user's token was inside its last 2 minutes.
   Future<String?> getAccessToken({bool forceRefresh = false}) async {
-    // 1. Prefer authenticated user's session from AuthService
-    final userToken = await AuthService().getFreshAccessToken();
-    if (userToken != null && userToken.isNotEmpty && !isJwtExpired(userToken)) {
-      _cachedAccessToken = userToken;
-      return userToken;
-    }
-
-    if (!forceRefresh && _cachedAccessToken != null && _cachedAccessToken!.isNotEmpty && !isJwtExpired(_cachedAccessToken!)) {
-      return _cachedAccessToken;
-    }
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!forceRefresh) {
-        final saved = prefs.getString('syncdub_access_token');
-        if (saved != null && saved.isNotEmpty && !isJwtExpired(saved)) {
-          _cachedAccessToken = saved;
-          return saved;
+      var token = await AuthService().getFreshAccessToken();
+      if (AuthService().isAuthenticated &&
+          (forceRefresh || token == null || token.isEmpty || isJwtExpired(token))) {
+        try {
+          final res = await AuthService().client.auth.refreshSession();
+          token = res.session?.accessToken ?? token;
+        } catch (e) {
+          debugPrint('[BackendService] Token refresh failed: $e');
         }
       }
-
-      final url = Uri.parse(
-        '${SyncDubBackendConfig.supabaseUrl}/auth/v1/token?grant_type=password',
-      );
-
-      final response = await http.post(
-        url,
-        headers: {
-          'apikey': SyncDubBackendConfig.supabaseAnonKey,
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'email': SyncDubBackendConfig.defaultEmail,
-          'password': SyncDubBackendConfig.defaultPassword,
-        }),
-      ).timeout(const Duration(seconds: 12));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final token = data['access_token'] as String?;
-        if (token != null && token.isNotEmpty) {
-          _cachedAccessToken = token;
-          await prefs.setString('syncdub_access_token', token);
-          return token;
-        }
+      // Hard-expired only (no skew): a token with <2 min left is still valid for this handshake.
+      if (token != null && token.isNotEmpty && !isJwtExpired(token, skew: Duration.zero)) {
+        _cachedAccessToken = token;
+        return token;
       }
     } catch (e) {
       debugPrint('[BackendService] Auth token fetch error: $e');
     }
-    return _cachedAccessToken;
+    _cachedAccessToken = null;
+    return null;
   }
 
   /// Query live user plan and remaining translation credits from Render proxy
@@ -160,8 +163,9 @@ class SyncDubBackendService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final plan = data['plan']?.toString() ?? 'pro';
-        final minutes = (data['minutes'] as num?)?.toDouble() ?? 3000.0;
+        final minutes = (data['minutes'] as num?)?.toDouble();
+        if (minutes == null) return null; // never show an invented balance
+        final plan = data['plan']?.toString() ?? 'free';
         return BackendPlanInfo(
           plan: plan,
           minutesRemaining: minutes,
@@ -202,10 +206,46 @@ class SyncDubBackendService {
   bool _setupAckReceived = false;
   bool get isSetupComplete => _setupAckReceived;
 
-  /// Stream a raw 16kHz PCM audio chunk to Gemini 3.5 Live Translate over WebSocket
+  // ---- First-token timing (printed once per session as one "[Latency]" log line) ----
+  final Stopwatch _sessionClock = Stopwatch();
+  int _tWsReadyMs = -1;
+  int _tSetupAckMs = -1;
+  int _tCaptureMs = -1;
+  bool _firstAudioLogged = false;
+
+  /// Tear the session down and report it - used when audio capture cannot start.
+  Future<void> _failSession(
+    int gen,
+    String message,
+    void Function(String errorReason) onDisconnected,
+  ) async {
+    if (gen != _sessionGeneration) return; // already stopped / replaced
+    await stopLiveDubbingSession();
+    onDisconnected(message);
+  }
+
+  /// Stream a raw 16kHz PCM audio chunk to SyncDub AI Live Translate over WebSocket
+  // Audio captured while the cloud handshake is still in flight (capture starts in parallel with it).
+  final List<String> _preAckChunks = [];
+  static const int _maxPreAckChunks = 12; // ~480ms of 40ms frames
+  int _lastDubbedOutputMs = 0;
+
   void sendAudioChunk(String base64Pcm) {
-    if (_isConnected && _setupAckReceived && _wsChannel != null && base64Pcm.isNotEmpty) {
+    if (_isPaused || base64Pcm.isEmpty) return;
+    if (_isConnected && !_setupAckReceived) {
+      _preAckChunks.add(base64Pcm);
+      if (_preAckChunks.length > _maxPreAckChunks) _preAckChunks.removeAt(0);
+      return;
+    }
+    if (_isConnected && _setupAckReceived && _wsChannel != null) {
       try {
+        // Latency clock starts at a real speech onset (after a quiet gap), not at the first silent frame
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        if (_speechTurnStartTimestamp == 0 &&
+            nowMs - _lastDubbedOutputMs > 1000 &&
+            AudioPipelineService().micAmplitude.value > 0.02) {
+          _speechTurnStartTimestamp = nowMs;
+        }
         final mediaMsg = jsonEncode({
           'realtimeInput': {
             'audio': {
@@ -228,60 +268,94 @@ class SyncDubBackendService {
   Future<void> startLiveDubbingSession({
     required String targetLanguageCode,
     String captureMode = 'internal',
+    // When set, the network handshake starts immediately while this future is still pending (e.g. the
+    // Android screen-capture permission dialog). Capture starts only once it resolves to a mode; a null
+    // result means the user declined and the half-open session is torn down quietly.
+    Future<String?>? captureModeFuture,
+    bool preserveNativeCapture = false,
     required void Function(double credits, String plan) onCreditsUpdate,
     required void Function(int latencyMs) onLatencyUpdate,
-    required void Function(String originalText, String dubbedText) onTranscriptUpdate,
     required void Function(String status) onStatusChange,
     required void Function(String errorReason) onDisconnected,
   }) async {
-    await stopLiveDubbingSession();
+    await stopLiveDubbingSession(preserveNativeCapture: preserveNativeCapture);
+    final gen = ++_sessionGeneration;
     _setupAckReceived = false;
     _lastServerReportReason = null;
+    _sessionClock
+      ..reset()
+      ..start();
+    _tWsReadyMs = -1;
+    _tSetupAckMs = -1;
+    _tCaptureMs = -1;
+    _firstAudioLogged = false;
+
+    // With a pending capture permission the UI must not say "Live" until capture can really start,
+    // even if the server's setupComplete wins the race against the user's tap on "Allow".
+    final deferred = captureModeFuture != null;
+    var captureReady = !deferred;
+    var activeAnnounced = false;
+    void announceActive() {
+      if (activeAnnounced || gen != _sessionGeneration) return;
+      activeAnnounced = true;
+      onStatusChange('Live Dubbing Active');
+    }
 
     try {
       onStatusChange('Connecting to SyncDub AI Engine...');
 
-      // 1. Acquire valid access token (prefer active Google session, fallback to default)
+      // 1. Acquire the signed-in user's own access token (no shared-account fallback)
       var token = await getAccessToken();
-      if (token == null || token.isEmpty || isJwtExpired(token)) {
-        token = await getAccessToken(forceRefresh: true);
+      token ??= await getAccessToken(forceRefresh: true);
+      if (token == null || token.isEmpty) {
+        onDisconnected('Authentication token expired. Please re-authenticate.');
+        return;
       }
-
-      // 2. Pre-flight check: wake up Render if sleeping
-      onStatusChange('Waking up SyncDub AI Engine...');
-      final healthCheck = await checkBackendHealth();
-      if (!healthCheck['isHealthy']) {
-        debugPrint('[BackendService] Warm-up ping returned degraded status, continuing to connect...');
-      }
+      final String authToken = token;
 
       onStatusChange('Connecting to Cloud Pipeline...');
+
+      // Fire-and-forget background health check — do NOT block WS connection for warm servers
+      // This saves 300ms-2s on every session start when Render server is already warm
+      checkBackendHealth().then((health) {
+        debugPrint('[BackendService] Background health check: ${health['message']}');
+      }).catchError((_) {});
       WebSocketChannel? channel;
       final wsUri = Uri.parse(SyncDubBackendConfig.proxyWsUrl);
+      // Protocol-level pings stop NAT / Render's proxy from silently dropping the socket while
+      // dubbing is paused (no audio frames are sent during silence auto-pause).
+      const wsPing = Duration(seconds: 20);
       try {
-        channel = WebSocketChannel.connect(wsUri);
+        channel = IOWebSocketChannel.connect(wsUri, pingInterval: wsPing);
         await channel.ready.timeout(const Duration(seconds: 40));
       } catch (e) {
         debugPrint('[BackendService] Primary WS connection attempt failed: $e, retrying once...');
+        try {
+          channel?.sink.close(); // do not leak the half-open first attempt
+        } catch (_) {}
+        if (gen != _sessionGeneration) return; // user pressed Stop while connecting
         onStatusChange('Reconnecting to AI Cloud Engine...');
-        await Future.delayed(const Duration(milliseconds: 1500));
-        channel = WebSocketChannel.connect(wsUri);
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (gen != _sessionGeneration) return;
+        channel = IOWebSocketChannel.connect(wsUri, pingInterval: wsPing);
         await channel.ready.timeout(const Duration(seconds: 45));
+      }
+
+      if (gen != _sessionGeneration) {
+        try {
+          channel.sink.close();
+        } catch (_) {}
+        return;
       }
 
       _wsChannel = channel;
       _isConnected = true;
+      _tWsReadyMs = _sessionClock.elapsedMilliseconds;
 
       // 3. Attach stream listener FIRST before sending any data frames
       _wsSubscription = _wsChannel!.stream.listen(
         (dynamic data) async {
           try {
-            final now = DateTime.now().millisecondsSinceEpoch;
-            if (_lastPingTimestamp > 0) {
-              final latency = now - _lastPingTimestamp;
-              onLatencyUpdate(latency.clamp(180, 480));
-              _lastPingTimestamp = 0;
-            }
-
             final String text;
             if (data is String) {
               text = data;
@@ -329,29 +403,46 @@ class SyncDubBackendService {
                 debugPrint('[BackendService] Server close diagnostics captured: $_lastServerReportReason');
               }
 
-              // Credits Update
+              // Credits Update - update accounting only; do not overwrite live/paused status
               if (parsed['action'] == 'creditsUpdate') {
-                final credits = (parsed['credits'] as num?)?.toDouble() ?? 3000.0;
-                final plan = parsed['plan']?.toString() ?? 'pro';
-                onCreditsUpdate(credits, plan);
-                if (_setupAckReceived) {
-                  onStatusChange('Live Translating');
+                final credits = (parsed['credits'] as num?)?.toDouble();
+                if (credits != null) {
+                  onCreditsUpdate(credits, parsed['plan']?.toString() ?? '');
                 }
               }
 
               // Setup ACK: Check if setupComplete exists
               if (parsed.containsKey('setupComplete') && !_setupAckReceived) {
+                if (gen != _sessionGeneration) {
+                  return;
+                }
                 _setupAckReceived = true;
+                _tSetupAckMs = _sessionClock.elapsedMilliseconds;
                 _handshakeTimeoutTimer?.cancel();
                 _handshakeTimeoutTimer = null;
-                onStatusChange('Live Dubbing Active');
-                debugPrint('[BackendService] SetupComplete received from Gemini. Activating audio capture pipeline...');
-                // Pipe audio chunks directly to WebSocket
+                if (captureReady) announceActive();
+                debugPrint('[BackendService] SetupComplete received from SyncDub AI. Activating audio capture pipeline...');
+                // Capture already runs (started before handshake). Flush the pre-ACK audio, then stream live.
                 AudioPipelineService().onAudioChunkCaptured = sendAudioChunk;
-                await AudioPipelineService().startAudioCapture(mode: captureMode);
+                final pending = List<String>.from(_preAckChunks);
+                _preAckChunks.clear();
+                for (final c in pending) {
+                  sendAudioChunk(c);
+                }
+                // Deferred sessions start capture from the permission continuation below instead.
+                if (!deferred) {
+                  final captureOk = await AudioPipelineService().startAudioCapture(mode: captureMode);
+                  if (!captureOk) {
+                    unawaited(_failSession(
+                      gen,
+                      'Audio capture could not start. Please allow screen/microphone audio access and tap Start again.',
+                      onDisconnected,
+                    ));
+                  }
+                }
               }
 
-              // Transcript text and dubbed audio handling
+              // Dubbed audio handling (no transcripts are requested: they only add latency)
               if (parsed.containsKey('serverContent')) {
                 final serverContent = parsed['serverContent'] as Map<String, dynamic>?;
                 final modelTurn = serverContent?['modelTurn'] as Map<String, dynamic>?;
@@ -364,19 +455,29 @@ class SyncDubBackendService {
                       if (part.containsKey('inlineData')) {
                         final inlineData = part['inlineData'] as Map<String, dynamic>?;
                         final audioData = inlineData?['data']?.toString();
-                        if (audioData != null && audioData.isNotEmpty) {
+                        if (!_isPaused && !_isManualPaused && audioData != null && audioData.isNotEmpty) {
+                          final nowMs = DateTime.now().millisecondsSinceEpoch;
+                          if (_boundaryOutputSuppressUntilMs > nowMs) {
+                            debugPrint('[BoundaryAudioGuard] Discarded stale audio chunk arriving ${_boundaryOutputSuppressUntilMs - nowMs}ms inside boundary suppression window');
+                            continue;
+                          }
+                          if (_speechTurnStartTimestamp > 0) {
+                            final latency = nowMs - _speechTurnStartTimestamp;
+                            if (latency > 0 && latency < 20000) onLatencyUpdate(latency);
+                            _speechTurnStartTimestamp = 0;
+                          }
+                          _lastDubbedOutputMs = nowMs;
+                          if (!_firstAudioLogged) {
+                            _firstAudioLogged = true;
+                            // Timeline from the start of the connect. With the permission dialog running in parallel,
+                            // "capture ready" is when the user tapped Allow; the real wait after that moment is the last number.
+                            final tFirst = _sessionClock.elapsedMilliseconds;
+                            final sinceCapture = _tCaptureMs >= 0 ? tFirst - _tCaptureMs : -1;
+                            debugPrint('[Latency] connect -> websocket ready ${_tWsReadyMs}ms | -> setupComplete ${_tSetupAckMs}ms | -> capture ready ${_tCaptureMs}ms | -> first dubbed audio ${tFirst}ms (${sinceCapture}ms after capture start)');
+                          }
                           AudioPipelineService().playDubbedPcm(audioData, sampleRate: 24000);
-                        }
-                      }
-
-                      // Text Transcript
-                      if (part.containsKey('text')) {
-                        final text = part['text']?.toString() ?? '';
-                        if (text.isNotEmpty) {
-                          onTranscriptUpdate(
-                            'Live spoken input stream...',
-                            text,
-                          );
+                        } else if (_isPaused || _isManualPaused) {
+                          debugPrint('[BackendService] Dropped incoming serverContent PCM chunk while paused');
                         }
                       }
                     }
@@ -389,14 +490,23 @@ class SyncDubBackendService {
           }
         },
         onError: (err) {
+          // Stale session (stopped / language-switched) or already reported by onDone
+          if (gen != _sessionGeneration) return;
+          _sessionGeneration++;
           _handshakeTimeoutTimer?.cancel();
           _handshakeTimeoutTimer = null;
           debugPrint('[BackendService] WS error: $err');
           _isConnected = false;
           _setupAckReceived = false;
+          _wsChannel = null;
+          // The socket is gone: release native capture + playback instead of leaking them
+          unawaited(AudioPipelineService().stopMicCapture());
+          unawaited(AudioPipelineService().stopPlayback());
           onDisconnected('Connection error: $err');
         },
         onDone: () {
+          if (gen != _sessionGeneration) return;
+          _sessionGeneration++;
           _handshakeTimeoutTimer?.cancel();
           _handshakeTimeoutTimer = null;
           final code = channel?.closeCode;
@@ -404,6 +514,9 @@ class SyncDubBackendService {
           debugPrint('[BackendService] WS stream closed (code=$code, reason=$reason, lastReport=$_lastServerReportReason)');
           _isConnected = false;
           _setupAckReceived = false;
+          _wsChannel = null;
+          unawaited(AudioPipelineService().stopMicCapture());
+          unawaited(AudioPipelineService().stopPlayback());
 
           String userMessage = _lastServerReportReason ?? 'Connection closed';
           if (code == 1013) {
@@ -425,16 +538,66 @@ class SyncDubBackendService {
         },
       );
 
-      // 4. Send authentication frame
+      // 4. Normalize language code for SyncDub AI Live Translate (matching Chrome extension BCP47_MAP & BCP47_OVERRIDES)
+      String cleanLangCode = targetLanguageCode.trim();
+      if (cleanLangCode.toLowerCase() == 'zh-cn') {
+        cleanLangCode = 'zh-Hans';
+      } else if (cleanLangCode.toLowerCase() == 'zh-tw') {
+        cleanLangCode = 'zh-Hant';
+      } else if (cleanLangCode.toLowerCase() == 'ar-xm') {
+        cleanLangCode = 'ar';
+      } else if (!cleanLangCode.toLowerCase().startsWith('zh-')) {
+        cleanLangCode = cleanLangCode.split('-').first.toLowerCase();
+      }
+
+      // Start native capture NOW, in parallel with the auth/setup handshake (saves 100-300ms to first token).
+      // Frames captured before setupComplete are buffered (max ~480ms) and flushed on ACK.
+      // With a pending permission (captureModeFuture) the handshake above already runs while the system
+      // dialog is open; capture begins the moment the user allows it.
+      _preAckChunks.clear();
+      AudioPipelineService().onAudioChunkCaptured = sendAudioChunk;
+      unawaited(() async {
+        var mode = captureMode;
+        if (captureModeFuture != null) {
+          String? resolved;
+          try {
+            resolved = await captureModeFuture;
+          } catch (_) {
+            resolved = null;
+          }
+          if (gen != _sessionGeneration) return; // stopped / failed while the dialog was open
+          if (resolved == null) {
+            // Permission declined: the caller already reset the UI, just drop the half-open session.
+            await stopLiveDubbingSession();
+            return;
+          }
+          mode = resolved;
+        }
+        final ok = await AudioPipelineService().startAudioCapture(mode: mode);
+        if (gen != _sessionGeneration) return;
+        if (!ok) {
+          unawaited(_failSession(
+            gen,
+            'Audio capture could not start. Please allow screen/microphone audio access and tap Start again.',
+            onDisconnected,
+          ));
+          return;
+        }
+        captureReady = true;
+        _tCaptureMs = _sessionClock.elapsedMilliseconds;
+        if (_setupAckReceived) announceActive();
+      }());
+
+      // Send authentication frame
       onStatusChange('Authenticating with SyncDub...');
       final authMsg = jsonEncode({
         'action': 'authenticate',
-        'token': token ?? '',
-        'targetLang': targetLanguageCode,
+        'token': authToken,
+        'targetLang': cleanLangCode,
       });
       _wsChannel!.sink.add(authMsg);
 
-      // 5. Send setup frame for Gemini 3.5 Live Translate
+      // 5. Send setup frame for SyncDub AI Live Translate (matching Chrome extension offscreen.js lines 2013-2057)
       onStatusChange('Synchronizing AI Pipeline...');
       final setupMsg = jsonEncode({
         'setup': {
@@ -442,7 +605,7 @@ class SyncDubBackendService {
           'generation_config': {
             'response_modalities': ['AUDIO'],
             'translation_config': {
-              'target_language_code': targetLanguageCode,
+              'target_language_code': cleanLangCode,
               'echo_target_language': true,
             },
           },
@@ -455,8 +618,6 @@ class SyncDubBackendService {
               'silence_duration_ms': 300,
             },
           },
-          'input_audio_transcription': {},
-          'output_audio_transcription': {},
         },
       });
       _wsChannel!.sink.add(setupMsg);
@@ -471,16 +632,6 @@ class SyncDubBackendService {
         }
       });
 
-      // 7. Periodic ping for real latency telemetry
-      _latencyPingTimer?.cancel();
-      _latencyPingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-        if (_isConnected && _wsChannel != null) {
-          _lastPingTimestamp = DateTime.now().millisecondsSinceEpoch;
-          try {
-            _wsChannel!.sink.add(jsonEncode({'action': 'ping', 'timestamp': _lastPingTimestamp}));
-          } catch (_) {}
-        }
-      });
     } catch (e) {
       _handshakeTimeoutTimer?.cancel();
       _handshakeTimeoutTimer = null;
@@ -490,18 +641,56 @@ class SyncDubBackendService {
     }
   }
 
+  /// Real-time live language switch during an active translation session.
+  /// Kills the existing SyncDub AI WebSocket session cleanly and reconnects immediately
+  /// with the new target language, while keeping native audio capture alive.
+  Future<void> switchTargetLanguage({
+    required String newTargetLanguageCode,
+    String captureMode = 'internal',
+    required void Function(double credits, String plan) onCreditsUpdate,
+    required void Function(int latencyMs) onLatencyUpdate,
+    required void Function(String status) onStatusChange,
+    required void Function(String errorReason) onDisconnected,
+  }) async {
+    debugPrint('[BackendService] Seamlessly switching target language to: $newTargetLanguageCode');
+    final gen = ++_sessionGeneration;
+
+    onStatusChange('Disconnecting & Reconnecting to AI Engine...');
+
+    // 1. Temporarily detach audio chunk forwarding and stop old language playback
+    AudioPipelineService().onAudioChunkCaptured = null;
+    AudioPipelineService().stopPlayback();
+
+    // 2. Safely stop existing WebSocket session while preserving native capture
+    await stopLiveDubbingSession(preserveNativeCapture: true);
+
+    // 3. Grace delay for cloud proxy to recycle connection
+    await Future.delayed(const Duration(milliseconds: 250));
+    if (gen != _sessionGeneration) return;
+
+    // 4. Connect new session with new language code, preserving native capture
+    await startLiveDubbingSession(
+      targetLanguageCode: newTargetLanguageCode,
+      captureMode: captureMode,
+      preserveNativeCapture: true,
+      onCreditsUpdate: onCreditsUpdate,
+      onLatencyUpdate: onLatencyUpdate,
+      onStatusChange: onStatusChange,
+      onDisconnected: onDisconnected,
+    );
+  }
+
   /// Safely stop live streaming, mic capture, and audio playback
-  Future<void> stopLiveDubbingSession() async {
+  Future<void> stopLiveDubbingSession({bool preserveNativeCapture = false}) async {
+    if (!preserveNativeCapture) {
+      _isPaused = false;
+      _isManualPaused = false;
+      _sessionGeneration++;
+    }
     _handshakeTimeoutTimer?.cancel();
     _handshakeTimeoutTimer = null;
-    _latencyPingTimer?.cancel();
-    _latencyPingTimer = null;
-    _lastPingTimestamp = 0;
-
-    // Send graceful close packet to release server slots immediately
-    try {
-      _wsChannel?.sink.add(jsonEncode({'action': 'close'}));
-    } catch (_) {}
+    _speechTurnStartTimestamp = 0;
+    _preAckChunks.clear();
 
     await _wsSubscription?.cancel();
     _wsSubscription = null;
@@ -513,8 +702,54 @@ class SyncDubBackendService {
     _isConnected = false;
     _setupAckReceived = false;
 
-    // Stop native audio pipeline
-    await AudioPipelineService().stopMicCapture();
+    // Stop native audio pipeline only if not preserving for real-time language switch
+    if (!preserveNativeCapture) {
+      await AudioPipelineService().stopMicCapture();
+    }
     await AudioPipelineService().stopPlayback();
+  }
+
+  /// Creates a standard canonical 44-byte RIFF WAVE header for 16-bit PCM audio
+  static Uint8List createWavHeader({
+    required int pcmDataLength,
+    int sampleRate = 24000,
+    int numChannels = 1,
+    int bitsPerSample = 16,
+  }) {
+    final byteRate = sampleRate * numChannels * (bitsPerSample ~/ 8);
+    final blockAlign = numChannels * (bitsPerSample ~/ 8);
+    final fileSize = 36 + pcmDataLength;
+
+    final header = Uint8List(44);
+    final bdata = ByteData.view(header.buffer);
+
+    // "RIFF"
+    header[0] = 0x52; header[1] = 0x49; header[2] = 0x46; header[3] = 0x46;
+    // File size - 8
+    bdata.setUint32(4, fileSize, Endian.little);
+    // "WAVE"
+    header[8] = 0x57; header[9] = 0x41; header[10] = 0x56; header[11] = 0x45;
+    // "fmt "
+    header[12] = 0x66; header[13] = 0x6D; header[14] = 0x74; header[15] = 0x20;
+    // Subchunk1Size = 16
+    bdata.setUint32(16, 16, Endian.little);
+    // AudioFormat = 1 (PCM)
+    bdata.setUint16(20, 1, Endian.little);
+    // NumChannels = 1
+    bdata.setUint16(22, numChannels, Endian.little);
+    // SampleRate = 24000
+    bdata.setUint32(24, sampleRate, Endian.little);
+    // ByteRate = 48000
+    bdata.setUint32(28, byteRate, Endian.little);
+    // BlockAlign = 2
+    bdata.setUint16(32, blockAlign, Endian.little);
+    // BitsPerSample = 16
+    bdata.setUint16(34, bitsPerSample, Endian.little);
+    // "data"
+    header[36] = 0x64; header[37] = 0x61; header[38] = 0x74; header[39] = 0x61;
+    // Subchunk2Size = pcmDataLength
+    bdata.setUint32(40, pcmDataLength, Endian.little);
+
+    return header;
   }
 }

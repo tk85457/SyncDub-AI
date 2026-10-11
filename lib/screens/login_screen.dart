@@ -132,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 ],
                               ),
                               child: Image.asset(
-                                'assets/images/app_icon.png',
+                                'assets/images/app_icon.webp',
                                 fit: BoxFit.contain,
                               ),
                             ),
@@ -262,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Image.asset(
-                                    'assets/images/google_logo.png',
+                                    'assets/images/google_logo.webp',
                                     width: 22,
                                     height: 22,
                                     fit: BoxFit.contain,

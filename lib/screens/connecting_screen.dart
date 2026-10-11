@@ -62,18 +62,18 @@ class _ConnectingScreenState extends State<ConnectingScreen> with SingleTickerPr
     final List<Map<String, dynamic>> steps = [
       {
         'icon': Iconsax.global,
-        'name': 'Establishing TLS 1.3 socket',
+        'name': 'Opening secure connection',
         'sub': 'Encrypted pipeline',
       },
       {
         'icon': Iconsax.flash,
-        'name': 'Connecting to SyncDub AI Live Node',
-        'sub': 'Routing nearest server (~32ms)',
+        'name': 'Connecting to SyncDub live server',
+        'sub': 'Authenticating your session',
       },
       {
         'icon': Iconsax.microphone,
-        'name': 'Initialising 48kHz PCM Stream',
-        'sub': '16-bit low latency buffer',
+        'name': 'Preparing audio stream',
+        'sub': '16 kHz mono, low latency',
       },
       {
         'icon': Iconsax.tick_circle,
@@ -132,7 +132,7 @@ class _ConnectingScreenState extends State<ConnectingScreen> with SingleTickerPr
                 ),
               ),
               Image.asset(
-                'assets/images/app_icon.png',
+                'assets/images/app_icon.webp',
                 width: 64,
                 height: 64,
                 fit: BoxFit.contain,

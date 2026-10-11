@@ -86,9 +86,10 @@ class _LanguagePickerSheetState extends State<LanguagePickerSheet> {
     return SafeArea(
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.82,
+          maxHeight: (MediaQuery.of(context).size.height - MediaQuery.of(context).viewInsets.bottom) * 0.82,
         ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        // keep the search box and list above the on-screen keyboard
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.of(context).viewInsets.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,6 +150,14 @@ class _LanguagePickerSheetState extends State<LanguagePickerSheet> {
               ),
             ),
             const SizedBox(height: 14),
+            if (_filteredLanguages.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 28),
+                child: Center(
+                  child: Text('No languages found', style: TextStyle(fontSize: 13, color: fg3)),
+                ),
+              )
+            else
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,

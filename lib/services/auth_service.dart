@@ -46,6 +46,8 @@ class AuthService {
   SupabaseClient get client => Supabase.instance.client;
 
   User? get currentUser => _initialized ? client.auth.currentUser : null;
+  User? get user => currentUser;
+  String? get userId => currentUser?.id;
   Session? get currentSession => _initialized ? client.auth.currentSession : null;
   bool get isAuthenticated => currentSession != null;
 
@@ -88,6 +90,36 @@ class AuthService {
       debugPrint('[AuthService] refreshSession error: $e');
       return client.auth.currentSession?.accessToken;
     }
+  }
+
+  /// Maps a native Google Sign-In / Supabase failure to a clear, actionable error.
+  AppError _nativeSignInError(Object e) {
+    final text = e.toString();
+    if (text.contains('ApiException: 10') || text.contains('DEVELOPER_ERROR')) {
+      return AppError(
+        title: 'Google Sign-In Not Configured',
+        reason: 'This app build is not registered with Google (package name / SHA-1 mismatch).',
+        recoveryAction: 'Install the official Play Store version of the app',
+        type: AppErrorType.auth,
+      );
+    }
+    if (text.contains('ApiException: 7') || text.contains('network_error')) {
+      return AppError(
+        title: 'No Connection',
+        reason: 'Could not reach Google. Please check your internet connection.',
+        recoveryAction: 'Retry sign-in',
+        type: AppErrorType.network,
+      );
+    }
+    if (text.contains('ApiException: 12501') || text.contains('sign_in_canceled')) {
+      return AppError(
+        title: 'Sign-In Cancelled',
+        reason: 'Google account selection was closed without selecting an account.',
+        recoveryAction: 'Tap Continue with Google to select your account',
+        type: AppErrorType.auth,
+      );
+    }
+    return AppError.fromException(e, context: 'Google Sign-In');
   }
 
   /// Secure Google Sign In with native Google Play Services + Supabase
@@ -133,18 +165,22 @@ class AuthService {
             return AuthResult(success: true, user: res.user);
           }
         }
+        // Google answered but gave no ID token (or Supabase returned no session).
+        return AuthResult(
+          success: false,
+          error: AppError(
+            title: 'Sign-In Failed',
+            reason: 'Google did not return a valid sign-in token. Please try again.',
+            recoveryAction: 'Tap Continue with Google to retry',
+            type: AppErrorType.auth,
+          ),
+        );
       } catch (nativeErr) {
-        debugPrint('[AuthService] Native Google Sign In exception. Trying browser OAuth fallback...');
+        // Never fall back to browser OAuth: it leaves the app and lands on the website. The real
+        // reason is logged and mapped to a clear message instead.
+        debugPrint('[AuthService] Native Google Sign In failed: $nativeErr');
+        return AuthResult(success: false, error: _nativeSignInError(nativeErr));
       }
-
-      // 2. Fallback: Supabase Web OAuth Flow with deep link
-      final res = await client.auth.signInWithOAuth(
-        OAuthProvider.google,
-        redirectTo: 'syncdub://login-callback',
-        authScreenLaunchMode: LaunchMode.externalApplication,
-      );
-
-      return AuthResult(success: res);
     } catch (e) {
       final sanitized = AppError.fromException(e, context: 'Google Sign-In');
       debugPrint('[AuthService] Google Sign In error: ${sanitized.reason}');
@@ -185,7 +221,12 @@ class AuthService {
     }
   }
 
-  /// Fetch user profile (translation minutes & plan) directly from Supabase
+  /// Reads the signed-in user's profile (translation minutes & plan) from Supabase.
+  ///
+  /// READ-ONLY by design: row-level security forbids the app from writing to `profiles`, so a user
+  /// can never give themselves minutes. Only the Render server (service role) changes balances.
+  /// Returns null when the row does not exist yet or cannot be read; the caller then asks the server
+  /// (/api/user-plan), which creates the profile with the free signup minutes on first use.
   Future<Map<String, dynamic>?> fetchUserProfile() async {
     if (!isAuthenticated || currentUser == null) return null;
     try {
@@ -195,50 +236,15 @@ class AuthService {
           .eq('id', currentUser!.id)
           .maybeSingle();
 
-      if (res != null) {
-        return {
-          'plan': res['plan']?.toString() ?? 'pro',
-          'minutes': (res['translation_minutes_remaining'] as num?)?.toDouble() ?? 3000.0,
-        };
-      } else {
-        // Auto-provision initial profile with 3000 free minutes for newly logged-in user
-        try {
-          await client.from('profiles').upsert({
-            'id': currentUser!.id,
-            'plan': 'pro',
-            'translation_minutes_remaining': 3000.0,
-          });
-          return {
-            'plan': 'pro',
-            'minutes': 3000.0,
-          };
-        } catch (upsertErr) {
-          debugPrint('[AuthService] Profile auto-provision error: $upsertErr');
-        }
-      }
+      final minutes = (res?['translation_minutes_remaining'] as num?)?.toDouble();
+      if (res == null || minutes == null) return null;
+      return {
+        'plan': res['plan']?.toString() ?? 'free',
+        'minutes': minutes,
+      };
     } catch (e) {
       debugPrint('[AuthService] fetchUserProfile error: ${AppError.fromException(e).reason}');
-    }
-    return null;
-  }
-
-  /// Persist updated subscription plan and remaining translation minutes to Supabase
-  Future<bool> updateUserProfile({
-    required String plan,
-    required double minutes,
-  }) async {
-    if (!isAuthenticated || currentUser == null) return false;
-    try {
-      await client.from('profiles').upsert({
-        'id': currentUser!.id,
-        'plan': plan,
-        'translation_minutes_remaining': minutes,
-      });
-      debugPrint('[AuthService] Supabase profile updated: plan=$plan, minutes=$minutes');
-      return true;
-    } catch (e) {
-      debugPrint('[AuthService] updateUserProfile error: ${AppError.fromException(e).reason}');
-      return false;
+      return null;
     }
   }
 }

@@ -17,7 +17,8 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> with TickerProviderStateMixin {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final PageController _pageController;
   late final AnimationController _pulseController;
   late final AnimationController _demoWaveController;
@@ -38,13 +39,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     AppTheme.emerald,           // Slide 0: Neural Dubbing
     const Color(0xFF0EA5E9),    // Slide 1: Floating Overlay (Sky Blue)
     const Color(0xFF6366F1),    // Slide 2: Permissions (Indigo)
-    const Color(0xFFF59E0B),    // Slide 3: Audio Ducking (Amber)
+    const Color(0xFFF59E0B),    // Slide 3: Audio Balance & Volume (Amber)
     AppTheme.emerald,           // Slide 4: Personalize & Launch (Emerald)
   ];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 100% Full-Screen Edge-to-Edge Carousel
     _pageController = PageController(viewportFraction: 1.0)
       ..addListener(() {
@@ -67,6 +69,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     )..repeat();
 
     _checkPermissionsState();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed) {
+      _checkPermissionsState();
+    }
   }
 
   Future<void> _checkPermissionsState() async {
@@ -111,6 +120,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _pulseController.dispose();
     _demoWaveController.dispose();
@@ -195,16 +205,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
             },
           ),
 
-          // 3. FLOATING TOP BAR (Brand Pill + Slide Counter + Skip)
+          // 3. TOP SKIP ACTION (Discreet Edge-to-Edge Action — Top Brand & Counter removed completely)
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // App Brand Pill
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: InkWell(
+                  onTap: _finishOnboarding,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: (isDark ? const Color(0xFF0F172A) : Colors.white).withValues(alpha: 0.88),
                       borderRadius: BorderRadius.circular(20),
@@ -220,78 +231,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Image.asset(
-                          'assets/images/app_icon.png',
-                          width: 22,
-                          height: 22,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(width: 8),
                         Text(
-                          'SyncDub AI',
+                          'Skip',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.3,
-                            color: fg,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: fg2,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: activeColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${_currentIndex + 1}/$totalSlides',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: activeColor,
-                            ),
-                          ),
-                        ),
+                        const SizedBox(width: 4),
+                        Icon(Iconsax.arrow_right_3, size: 14, color: fg2),
                       ],
                     ),
                   ),
-
-                  // Skip Button (routes directly to Login)
-                  InkWell(
-                    onTap: _finishOnboarding,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: (isDark ? const Color(0xFF0F172A) : Colors.white).withValues(alpha: 0.88),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: bd),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Skip',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: fg2,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Iconsax.arrow_right_3, size: 14, color: fg2),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -512,10 +465,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
         break;
 
       case 3:
-        tagLabel = 'SMART AUDIO DUCKING & TUNING';
+        tagLabel = 'DUAL AUDIO BALANCE & VOLUME';
         tagIcon = Iconsax.setting_2;
-        title = 'Smart Audio Ducking\n& Dual Volume';
-        subtitle = 'Original video volume automatically drops to 20% when the dubbed voice speaks, so you hear every word crystal clear.';
+        title = 'Dual Audio Balance\n& Volume Sliders';
+        subtitle = 'Control original video sound and AI dubbed voice independently with precision dual sliders.';
         heroWidget = _buildHero3(isDark, bd, fg, fg3, cardBg);
         break;
 
@@ -535,12 +488,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.fromLTRB(
             22,
-            MediaQuery.of(context).padding.top + 62,
+            MediaQuery.of(context).padding.top + 16,
             22,
             120, // Clear floating bottom bar
           ),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - (MediaQuery.of(context).padding.top + 182)),
+            constraints: BoxConstraints(minHeight: constraints.maxHeight - (MediaQuery.of(context).padding.top + 136)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -647,7 +600,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                       ],
                     ),
                     child: Image.asset(
-                      'assets/images/app_icon.png',
+                      'assets/images/app_icon.webp',
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -854,7 +807,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
               child: Row(
                 children: [
                   Image.asset(
-                    'assets/images/app_icon.png',
+                    'assets/images/app_icon.webp',
                     width: 32,
                     height: 32,
                     fit: BoxFit.contain,
@@ -965,7 +918,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     );
   }
 
-  // Hero 3: Smart Audio Ducking Simulation
+  // Hero 3: Dual Audio Balance Simulation
   Widget _buildHero3(bool isDark, Color bd, Color fg, Color fg3, Color cardBg) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -990,7 +943,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Audio Ducking Simulation', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: fg)),
+                  Text('Audio Balance Simulation', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: fg)),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
@@ -1003,7 +956,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
               ),
               const SizedBox(height: 12),
 
-              // Original Video Volume Bar (dips to 20%)
+              // Original Video Volume Bar (default 0% silent)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1011,14 +964,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Original Media Audio (YouTube / Reels)', style: TextStyle(fontSize: 11, color: fg3)),
-                      const Text('20% (Auto-Ducked)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFF59E0B))),
+                      const Text('0% (Silent & Playing)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFF59E0B))),
                     ],
                   ),
                   const SizedBox(height: 4),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: 0.20,
+                      value: 0.0,
                       minHeight: 6,
                       backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
                       valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
@@ -1059,7 +1012,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
         _audioSettingPill(
           icon: Iconsax.sound,
           title: 'Dual Independent Volume',
-          desc: 'Tune dubbed voice and background video volume independently in Settings.',
+          desc: 'Tune dubbed voice and background video volume independently in Settings & Home.',
           badge: 'REALTIME',
           badgeColor: const Color(0xFF0EA5E9),
           isDark: isDark,
@@ -1076,14 +1029,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
   Widget _buildHero4(bool isDark, Color bd, Color fg, Color cardBg, Color activeColor) {
     final currentTarget = widget.state.targetLanguage;
     final topLanguages = [
-      kSupportedLanguages.firstWhere((l) => l.code == 'hi-IN', orElse: () => kSupportedLanguages[0]),
-      kSupportedLanguages.firstWhere((l) => l.code == 'en-US', orElse: () => kSupportedLanguages[1]),
-      kSupportedLanguages.firstWhere((l) => l.code == 'es-ES', orElse: () => kSupportedLanguages[2]),
-      kSupportedLanguages.firstWhere((l) => l.code == 'fr-FR', orElse: () => kSupportedLanguages[3]),
-      kSupportedLanguages.firstWhere((l) => l.code == 'de-DE', orElse: () => kSupportedLanguages[4]),
-      kSupportedLanguages.firstWhere((l) => l.code == 'ja-JP', orElse: () => kSupportedLanguages[5]),
-      kSupportedLanguages.firstWhere((l) => l.code == 'bn-IN', orElse: () => kSupportedLanguages[6]),
-      kSupportedLanguages.firstWhere((l) => l.code == 'ru-RU', orElse: () => kSupportedLanguages[7]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'hi', orElse: () => kSupportedLanguages[0]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'en', orElse: () => kSupportedLanguages[1]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'es', orElse: () => kSupportedLanguages[2]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'fr', orElse: () => kSupportedLanguages[3]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'de', orElse: () => kSupportedLanguages[4]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'ja', orElse: () => kSupportedLanguages[5]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'bn', orElse: () => kSupportedLanguages[6]),
+      kSupportedLanguages.firstWhere((l) => l.code == 'ru', orElse: () => kSupportedLanguages[7]),
     ];
 
     return Container(

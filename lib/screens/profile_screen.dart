@@ -110,7 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Row(
                     children: [
                       Image.asset(
-                        'assets/images/app_icon.png',
+                        'assets/images/app_icon.webp',
                         width: 28,
                         height: 28,
                         fit: BoxFit.contain,
@@ -186,12 +186,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 state.userAvatarUrl!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) => Image.asset(
-                                  'assets/images/app_icon.png',
+                                  'assets/images/app_icon.webp',
                                   fit: BoxFit.contain,
                                 ),
                               )
                             : Image.asset(
-                                'assets/images/app_icon.png',
+                                'assets/images/app_icon.webp',
                                 fit: BoxFit.contain,
                               ),
                       ),
@@ -216,7 +216,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const SyncDubFlaticon(assetName: 'anim_verified.gif', size: 16),
+                              const SyncDubFlaticon(assetName: 'anim_verified.webp', size: 16),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -283,7 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Row(
                           children: [
-                            const SyncDubFlaticon(assetName: 'anim_rocket.gif', size: 18),
+                            const SyncDubFlaticon(assetName: 'anim_rocket.webp', size: 18),
                             const SizedBox(width: 8),
                             Text(
                               'Live Dubbing Quota',
@@ -318,17 +318,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
                       children: [
-                        Text(
-                          state.isCreditsLoaded
-                              ? state.creditsRemaining.toStringAsFixed(1)
-                              : '...',
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w900,
-                            color: fg,
-                            letterSpacing: -1.0,
+                        if (!state.isCreditsLoaded)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: AppTheme.emerald,
+                              ),
+                            ),
+                          )
+                        else
+                          Text(
+                            state.creditsRemaining.toStringAsFixed(1),
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w900,
+                              color: fg,
+                              letterSpacing: -1.0,
+                            ),
                           ),
-                        ),
                         const SizedBox(width: 6),
                         Text(
                           'Minutes Remaining',
@@ -345,7 +356,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: LinearProgressIndicator(
-                        value: (state.creditsRemaining / 3000.0).clamp(0.05, 1.0),
+                        value: (state.creditsRemaining / 1600.0).clamp(0.05, 1.0),
                         minHeight: 6,
                         backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                         valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.emerald),
@@ -474,9 +485,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () => _showLegalDialog(
                         'Terms of Service',
                         'By using SyncDub AI, you agree to our standard terms:\n\n'
-                        '1. Service Availability: SyncDub AI provides sub-300ms real-time dubbing powered by the Gemini 3.5 Live translation pipeline.\n\n'
+                        '1. Service Availability: SyncDub AI provides sub-300ms real-time dubbing powered by the SyncDub AI Neural Speech pipeline.\n\n'
                         '2. Permitted Use: You are authorized to use SyncDub AI for personal translation across YouTube, social videos, and live media.\n\n'
-                        '3. Subscriptions & Quotas: Subscriptions are billed per your selected billing cycle. Quotas are refreshed automatically at renewal.',
+                        '3. Minute Packs & Quotas: Purchased minute packs are one-time additions to your balance and never expire.',
                       ),
                     ),
                     Divider(height: 1, color: bd),
@@ -569,7 +580,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // Footer App Version
               Center(
                 child: Text(
-                  'SyncDub AI v2.4.0 (Production Release)',
+                  'SyncDub AI v2.7.0',
                   style: TextStyle(fontSize: 11, color: fg3),
                 ),
               ),
