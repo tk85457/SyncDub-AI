@@ -265,7 +265,11 @@ class FloatingOverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent == null) return START_NOT_STICKY
+        if (intent == null) {
+            // System restart after the process was killed: the dubbing session is gone, nothing to keep alive
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         when (intent.action) {
             ACTION_START_FOREGROUND -> {
@@ -396,7 +400,7 @@ class FloatingOverlayService : Service() {
                 stopSelf()
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY // a live session cannot be revived by the system after a kill
     }
 
     private fun syncLanguageDetails() {

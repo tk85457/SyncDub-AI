@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
-import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 
 /// RevenueCat service for SyncDub AI (the ONLY billing stack in the app).
 ///
@@ -10,7 +9,7 @@ import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 /// - Dynamic offerings fetched live from RevenueCat (nothing hardcoded)
 /// - Google Play Billing via RevenueCat
 /// - Reactive ChangeNotifier so the paywall updates when the catalog loads
-/// - Native RevenueCat Paywall + Customer Center
+/// - Restore purchases
 ///
 /// SECURITY: this class NEVER credits translation minutes. A purchase is confirmed by RevenueCat's
 /// server-to-server webhook, which credits the user's profile on the Render server (idempotent,
@@ -26,6 +25,19 @@ class RevenueCatService extends ChangeNotifier {
 
   /// Primary Pro Entitlement
   static const String entitlementPro = 'syncdub_ai_pro';
+
+  /// Google Play one-time product IDs (see GOOGLE_PLAY_IN_APP_PRODUCTS_GUIDE.md).
+  /// Safety net only: when RevenueCat returns no packages (offering missing, or Play products not
+  /// attached to it in the dashboard) the paywall reads these straight from Google Play, so the
+  /// prices always show. Purchases still go through the RevenueCat SDK, so the webhook still credits.
+  static const List<String> storeProductIds = [
+    'syncdub_starter_120m',
+    'syncdub_pro_300m',
+    'syncdub_power_700m',
+    'syncdub_studio_1600m',
+  ];
+
+  List<StoreProduct> _storeProducts = [];
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -48,6 +60,24 @@ class RevenueCatService extends ChangeNotifier {
 
   /// Callback when a purchase fails
   void Function(String error)? onPurchaseError;
+
+  /// True when the last purchase attempt ended as "pending" / "already waiting" (e.g. UPI or a slow
+  /// bank). Google Play still completes it later and the webhook credits it, so the app keeps watching.
+  bool _lastPurchasePending = false;
+  bool get lastPurchasePending => _lastPurchasePending;
+
+  /// Technical reason for the last failure. It is always written to the log, and only debug builds
+  /// can show it on screen. End users only ever see the simple messages below.
+  String? _lastDebugDetail;
+  String? get lastDebugDetail => kDebugMode ? _lastDebugDetail : null;
+
+  // Simple, user-facing messages (no provider / store / dashboard wording).
+  static const String _msgNoInternet = 'No internet connection. Please check your network and try again.';
+  static const String _msgPricesUnavailable = 'Prices are not available right now. Please try again in a little while.';
+  static const String _msgPaymentFailed =
+      'The payment could not be completed. If any amount was deducted, your minutes will be added automatically.';
+  static const String _msgRestoreFailed = 'Could not restore your purchases. Please check your internet connection and try again.';
+  static const String _msgLinkFailed = 'We could not link this purchase to your account. Please check your connection and try again.';
 
   /// Initialize the RevenueCat SDK. Safe to call many times / concurrently: every caller shares
   /// the same initialization.
@@ -99,7 +129,8 @@ class RevenueCatService extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('[RevenueCatService] LogIn error: $e');
-      _lastErrorMessage = e.toString();
+      _lastDebugDetail = e.toString();
+      _lastErrorMessage = _msgLinkFailed;
       return false;
     }
   }
@@ -148,34 +179,143 @@ class RevenueCatService extends ChangeNotifier {
       _lastErrorMessage = null;
       notifyListeners();
 
-      _offerings = await Purchases.getOfferings();
-      debugPrint('[RevenueCatService] Loaded offerings: current=${_offerings?.current?.identifier}, packages=${_offerings?.current?.availablePackages.length ?? 0}');
+      // The paywall can open before the SDK finished configuring. Wait for it instead of failing.
+      if (!_isInitialized) {
+        await initialize();
+      }
+      if (!_isInitialized) {
+        _lastDebugDetail = 'Purchases SDK is not configured (configure failed or no network at start-up).';
+        _lastErrorMessage = _msgPricesUnavailable;
+        return null;
+      }
+
+      var networkDown = false;
+      try {
+        _offerings = await Purchases.getOfferings();
+        debugPrint('[RevenueCatService] Loaded offerings: all=${_offerings?.all.keys.toList()}, current=${_offerings?.current?.identifier}, packages=${availablePackages.length}');
+        if (_offerings == null || _offerings!.all.isEmpty) {
+          _lastDebugDetail = 'No offerings exist in RevenueCat for this app. Create an offering and make it Current.';
+        } else if (availablePackages.isEmpty) {
+          _lastDebugDetail = 'The RevenueCat offering has no packages. Add packages that point to your Google Play products.';
+        }
+      } on PlatformException catch (e) {
+        debugPrint('[RevenueCatService] Failed to fetch offerings: $e');
+        _lastDebugDetail = _offeringsDebugHint(e);
+        networkDown = PurchasesErrorHelper.getErrorCode(e) == PurchasesErrorCode.networkError;
+      } catch (e) {
+        debugPrint('[RevenueCatService] Failed to fetch offerings: $e');
+        _lastDebugDetail = e.toString();
+      }
+
+      // Safety net: RevenueCat gave no packages, so read the products straight from Google Play.
+      if (availablePackages.isEmpty && !networkDown) {
+        await _loadStoreProducts();
+      }
+
+      if (displayProducts.isEmpty) {
+        _lastErrorMessage = networkDown ? _msgNoInternet : _msgPricesUnavailable;
+      } else {
+        _lastErrorMessage = null;
+      }
       return _offerings;
-    } catch (e) {
-      debugPrint('[RevenueCatService] Failed to fetch offerings: $e');
-      _lastErrorMessage = e.toString();
-      return null;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// List of available packages in the current offering
+  /// Reads the one-time products directly from Google Play (through the RevenueCat SDK).
+  Future<void> _loadStoreProducts() async {
+    try {
+      final products = await Purchases.getProducts(
+        storeProductIds,
+        productCategory: ProductCategory.nonSubscription,
+      );
+      _storeProducts = List<StoreProduct>.from(products);
+      debugPrint('[RevenueCatService] Loaded ${products.length} products directly from the store');
+      if (products.isEmpty) {
+        _lastDebugDetail =
+            'Google Play returned none of the product IDs. Each ID must be ACTIVE in Play Console, and the app must be installed from Google Play (testing track or production).';
+      }
+    } catch (e) {
+      debugPrint('[RevenueCatService] Direct store products failed: $e');
+      _lastDebugDetail = e.toString();
+    }
+  }
+
+  /// What the paywall shows: RevenueCat packages when they exist, otherwise the products read
+  /// directly from Google Play. Sorted from the smallest to the largest price.
+  List<StoreProduct> get displayProducts {
+    final pkgs = availablePackages;
+    final list = pkgs.isNotEmpty
+        ? pkgs.map((p) => p.storeProduct).toList()
+        : List<StoreProduct>.from(_storeProducts);
+    list.sort((a, b) => a.price.compareTo(b.price));
+    return list;
+  }
+
+  /// The RevenueCat package that wraps this store product, if the dashboard offering has one.
+  Package? _packageFor(StoreProduct product) {
+    for (final pkg in availablePackages) {
+      if (pkg.storeProduct.identifier == product.identifier) return pkg;
+    }
+    return null;
+  }
+
+  /// Packages to show on the paywall. Uses the offering flagged "Current" in RevenueCat; if none is
+  /// flagged (or it is empty) it falls back to the first offering that has packages, so a missing
+  /// "Current" flag in the dashboard never leaves the paywall empty.
   List<Package> get availablePackages {
-    final current = _offerings?.current;
-    if (current == null) return [];
-    return current.availablePackages;
+    final offerings = _offerings;
+    if (offerings == null) return [];
+    final current = offerings.current;
+    if (current != null && current.availablePackages.isNotEmpty) {
+      return current.availablePackages;
+    }
+    for (final offering in offerings.all.values) {
+      if (offering.availablePackages.isNotEmpty) return offering.availablePackages;
+    }
+    return [];
+  }
+
+  /// Technical explanation of why the catalog could not load. Debug builds / logs only.
+  String _offeringsDebugHint(PlatformException e) {
+    switch (PurchasesErrorHelper.getErrorCode(e)) {
+      case PurchasesErrorCode.configurationError:
+        return 'Google Play did not return the products. Each RevenueCat product ID must exactly match an ACTIVE Google Play product, and this build must be installed from a Google Play testing track.';
+      case PurchasesErrorCode.networkError:
+        return 'No internet connection. Check your network and tap Refresh.';
+      case PurchasesErrorCode.storeProblemError:
+        return 'Google Play is not available right now. Update Google Play services and try again.';
+      case PurchasesErrorCode.invalidCredentialsError:
+        return 'RevenueCat rejected the API key. Check the Android public key in the app.';
+      default:
+        return e.message ?? e.toString();
+    }
+  }
+
+  String _friendlyPurchaseError(PlatformException e) {
+    switch (PurchasesErrorHelper.getErrorCode(e)) {
+      case PurchasesErrorCode.networkError:
+        return _msgNoInternet;
+      case PurchasesErrorCode.productAlreadyPurchasedError:
+        return 'You already have a payment waiting. Your minutes will be added shortly.';
+      case PurchasesErrorCode.paymentPendingError:
+        return 'Your payment is pending. Your minutes will be added as soon as it is confirmed.';
+      default:
+        return _msgPaymentFailed;
+    }
   }
 
   /// Purchase a dynamic RevenueCat package.
   ///
   /// Returns true when Google Play accepted the payment. It does NOT mean minutes are credited yet:
   /// the server credits them after RevenueCat's webhook arrives (usually within seconds).
-  Future<bool> purchasePackage(Package package, {required String appUserId}) async {
+  Future<bool> purchaseProduct(StoreProduct product, {required String appUserId}) async {
     try {
       _isLoading = true;
       _lastErrorMessage = null;
+      _lastPurchasePending = false;
       notifyListeners();
 
       // A purchase made while anonymous could never be credited by the webhook. Refuse it.
@@ -186,12 +326,13 @@ class RevenueCatService extends ChangeNotifier {
         return false;
       }
 
+      final package = _packageFor(product);
       final purchaseResult = await Purchases.purchase(
-        PurchaseParams.package(package),
+        package != null ? PurchaseParams.package(package) : PurchaseParams.storeProduct(product),
       );
       _customerInfo = purchaseResult.customerInfo;
 
-      debugPrint('[RevenueCatService] Purchase accepted for ${package.storeProduct.identifier}; awaiting server credit');
+      debugPrint('[RevenueCatService] Purchase accepted for ${product.identifier}; awaiting server credit');
       return true;
     } catch (e) {
       if (e is PlatformException) {
@@ -199,6 +340,10 @@ class RevenueCatService extends ChangeNotifier {
         if (errorCode == PurchasesErrorCode.purchaseCancelledError) {
           debugPrint('[RevenueCatService] Purchase cancelled by user');
           return false;
+        }
+        if (errorCode == PurchasesErrorCode.paymentPendingError ||
+            errorCode == PurchasesErrorCode.productAlreadyPurchasedError) {
+          _lastPurchasePending = true;
         }
         if (errorCode == PurchasesErrorCode.productAlreadyPurchasedError) {
           // Google Play still holds an unconsumed purchase: syncing hands it to RevenueCat so the
@@ -209,8 +354,9 @@ class RevenueCatService extends ChangeNotifier {
         }
       }
       debugPrint('[RevenueCatService] Purchase error: $e');
-      _lastErrorMessage = e.toString();
-      onPurchaseError?.call(e.toString());
+      _lastDebugDetail = e.toString();
+      _lastErrorMessage = e is PlatformException ? _friendlyPurchaseError(e) : _msgPaymentFailed;
+      onPurchaseError?.call(_lastErrorMessage!);
       return false;
     } finally {
       _isLoading = false;
@@ -218,36 +364,11 @@ class RevenueCatService extends ChangeNotifier {
     }
   }
 
-  /// Present RevenueCat Native Paywall UI
-  Future<PaywallResult> presentPaywall() async {
-    try {
-      final result = await RevenueCatUI.presentPaywall(
-        displayCloseButton: true,
-      );
-      if (result == PaywallResult.purchased || result == PaywallResult.restored) {
-        await refreshCustomerInfo();
-      }
-      return result;
-    } catch (e) {
-      debugPrint('[RevenueCatService] presentPaywall error: $e');
-      return PaywallResult.error;
-    }
-  }
-
-  /// Present RevenueCat Customer Center UI (manage purchases)
-  Future<void> presentCustomerCenter() async {
-    try {
-      await RevenueCatUI.presentCustomerCenter();
-      await refreshCustomerInfo();
-    } catch (e) {
-      debugPrint('[RevenueCatService] presentCustomerCenter error: $e');
-    }
-  }
-
   /// Restore purchases
   Future<CustomerInfo?> restorePurchases() async {
     try {
       _isLoading = true;
+      _lastErrorMessage = null;
       notifyListeners();
       final info = await Purchases.restorePurchases();
       _customerInfo = info;
@@ -255,8 +376,9 @@ class RevenueCatService extends ChangeNotifier {
       return info;
     } catch (e) {
       debugPrint('[RevenueCatService] restorePurchases error: $e');
-      _lastErrorMessage = e.toString();
-      onPurchaseError?.call(e.toString());
+      _lastDebugDetail = e.toString();
+      _lastErrorMessage = _msgRestoreFailed;
+      onPurchaseError?.call(_msgRestoreFailed);
       return null;
     } finally {
       _isLoading = false;
@@ -268,15 +390,15 @@ class RevenueCatService extends ChangeNotifier {
   /// store title/description. Returns 0 when it cannot be determined, in which case the UI simply
   /// hides the minutes label. The real credited amount always comes from the server catalog
   /// (public.iap_products), never from this value.
-  static int parseMinutesFromPackage(Package package) {
-    final id = package.storeProduct.identifier;
+  static int parseMinutesFromProduct(StoreProduct product) {
+    final id = product.identifier;
     final idMatch = RegExp(r'(\d+)\s*m\b', caseSensitive: false).firstMatch(id);
     if (idMatch != null) {
       final m = int.tryParse(idMatch.group(1) ?? '');
       if (m != null && m > 0) return m;
     }
 
-    final text = '${package.storeProduct.title} ${package.storeProduct.description}'.replaceAll(',', '');
+    final text = '${product.title} ${product.description}'.replaceAll(',', '');
     final textMatch = RegExp(r'(\d+)\s*(?:minute|min)', caseSensitive: false).firstMatch(text);
     if (textMatch != null) {
       final m = int.tryParse(textMatch.group(1) ?? '');

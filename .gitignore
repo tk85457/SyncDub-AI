@@ -50,3 +50,8 @@ android/app/release/
 # Symbolication related
 app.*.symbols
 app.*.map.json
+
+# Release artifacts & local backups
+*.aab
+*.apk
+_backup_*/

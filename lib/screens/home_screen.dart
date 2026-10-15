@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../models/translation_state.dart';
 import '../theme/app_theme.dart';
-import '../utils/app_error_handler.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/master_connect_button.dart';
 import '../widgets/motion_icon.dart';
@@ -329,112 +328,6 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
           ),
-
-          // 4. In-Box Contextual Error Card (Handles Mic Error and Offline without separate screen)
-          if (state.activeError != null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Container(
-                padding: const EdgeInsets.all(13),
-                decoration: BoxDecoration(
-                  color: state.activeError!.type == AppErrorType.microphone
-                      ? AppTheme.amber.withValues(alpha: 0.10)
-                      : AppTheme.danger.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: state.activeError!.type == AppErrorType.microphone
-                        ? AppTheme.amber.withValues(alpha: 0.35)
-                        : AppTheme.danger.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      state.activeError!.type == AppErrorType.microphone
-                          ? Iconsax.microphone_slash
-                          : Iconsax.cloud_cross,
-                      color: state.activeError!.type == AppErrorType.microphone
-                          ? AppTheme.amber
-                          : AppTheme.danger,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            state.activeError!.title,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: state.activeError!.type == AppErrorType.microphone
-                                  ? AppTheme.amber
-                                  : AppTheme.danger,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            state.activeError!.reason,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: fg,
-                              height: 1.35,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              ElevatedButton(
-                                onPressed: () {
-                                  if (state.activeError!.type == AppErrorType.microphone) {
-                                    state.requestMicPermission();
-                                  } else {
-                                    state.retryConnection();
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: state.activeError!.type == AppErrorType.microphone
-                                      ? AppTheme.amber
-                                      : AppTheme.danger,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: Text(
-                                  state.activeError!.recoveryAction,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () => state.clearActiveError(),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: Text(
-                                  'Dismiss',
-                                  style: TextStyle(fontSize: 11, color: fg3),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
 
           // 5. Authentic Chrome Extension Waveform Master Connect Button
           Padding(

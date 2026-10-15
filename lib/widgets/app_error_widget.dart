@@ -227,6 +227,7 @@ void showAppErrorSnackBar(
   BuildContext context,
   AppError error, {
   VoidCallback? onRetry,
+  double bottomOffset = 12,
 }) {
   if (!context.mounted) return;
   final messenger = ScaffoldMessenger.maybeOf(context);
@@ -250,56 +251,107 @@ void showAppErrorSnackBar(
     _ => Iconsax.warning_2,
   };
 
+  // Recovery sentences ('Verify internet & retry') are too long for a button: show a short verb instead.
+  final String actionLabel = switch (error.type) {
+    AppErrorType.microphone => 'Allow',
+    AppErrorType.quota => 'Upgrade',
+    AppErrorType.auth => 'Sign in',
+    _ => 'Retry',
+  };
+
   messenger.showSnackBar(
     SnackBar(
       behavior: SnackBarBehavior.floating,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      backgroundColor: const Color(0xFF1E293B),
-      elevation: 8,
-      duration: const Duration(seconds: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: accentColor.withValues(alpha: 0.35), width: 1),
-      ),
-      content: Row(
-        children: [
-          Icon(icon, color: accentColor, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  error.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  error.reason,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
+      margin: EdgeInsets.fromLTRB(14, 12, 14, bottomOffset),
+      padding: EdgeInsets.zero,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      duration: const Duration(seconds: 7),
+      content: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF18202F),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: accentColor.withValues(alpha: 0.45), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: accentColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    error.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    error.reason,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            if (onRetry != null)
+              TextButton(
+                onPressed: () {
+                  messenger.hideCurrentSnackBar();
+                  onRetry();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.emerald,
+                  backgroundColor: AppTheme.emerald.withValues(alpha: 0.12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  actionLabel,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              )
+            else
+              IconButton(
+                onPressed: messenger.hideCurrentSnackBar,
+                icon: Icon(Icons.close_rounded, size: 18, color: Colors.white.withValues(alpha: 0.6)),
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
+        ),
       ),
-      action: onRetry != null
-          ? SnackBarAction(
-              label: error.recoveryAction,
-              textColor: AppTheme.emerald,
-              onPressed: onRetry,
-            )
-          : null,
     ),
   );
 }

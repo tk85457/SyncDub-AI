@@ -19,6 +19,7 @@ class PaywallScreen extends StatefulWidget {
 
 class _PaywallScreenState extends State<PaywallScreen> {
   int _selectedIndex = 0;
+  bool _isRestoring = false;
 
   @override
   void initState() {
@@ -44,11 +45,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return ListenableBuilder(
       listenable: rc,
       builder: (context, _) {
-        final packages = rc.availablePackages;
+        final products = rc.displayProducts;
         final isLoading = rc.isLoading;
-        final selectedPkg = (packages.isNotEmpty && _selectedIndex < packages.length)
-            ? packages[_selectedIndex]
-            : (packages.isNotEmpty ? packages.first : null);
+        final selectedProduct = (products.isNotEmpty && _selectedIndex < products.length)
+            ? products[_selectedIndex]
+            : (products.isNotEmpty ? products.first : null);
 
         return SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -90,37 +91,42 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         color: fg,
                       ),
                     ),
-                    // Restore Purchases Action
+                    // Restore Purchases Action (real time: RevenueCat restore, then server balance is re-read)
                     InkWell(
-                      onTap: () async {
-                        state.triggerHaptic();
-                        final info = await rc.restorePurchases();
-                        if (context.mounted) {
-                          final hasPro = info?.entitlements.active.containsKey(RevenueCatService.entitlementPro) ?? false;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                hasPro
-                                    ? 'Purchases Restored! Active Pro Entitlement verified.'
-                                    : 'Restore completed. No previous active subscriptions found.',
-                              ),
-                              backgroundColor: hasPro ? AppTheme.emerald : Colors.blueGrey,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      },
+                      onTap: (_isRestoring || isLoading)
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              setState(() => _isRestoring = true);
+                              final result = await state.restoreRevenueCatPurchases();
+                              if (!mounted) return;
+                              setState(() => _isRestoring = false);
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(result.message),
+                                  backgroundColor: result.ok ? AppTheme.emerald : Colors.blueGrey,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            },
                       borderRadius: BorderRadius.circular(8),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-                        child: Text(
-                          'Restore',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.emerald,
-                          ),
-                        ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                        child: _isRestoring
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.emerald),
+                              )
+                            : Text(
+                                'Restore',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isLoading ? fg3 : AppTheme.emerald,
+                                ),
+                              ),
                       ),
                     ),
                   ],
@@ -132,31 +138,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Column(
                   children: [
-                    // Hero Tag
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.emeraldDim,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Iconsax.flash_1, size: 12, color: AppTheme.emerald),
-                          SizedBox(width: 4),
-                          Text(
-                            'REVENUECAT LIVE CATALOG',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.emerald,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     Text(
                       'Minutes That Never Expire',
                       style: TextStyle(
@@ -168,7 +149,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Buy once, use whenever you watch. Live packages synced from RevenueCat & Google Play.',
+                      'Buy once, use whenever you watch. Your minutes never expire.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -207,7 +188,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     const SizedBox(height: 16),
 
                     // Dynamic Package List from RevenueCat
-                    if (isLoading && packages.isEmpty) ...[
+                    if (isLoading && products.isEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 40),
                         child: Column(
@@ -215,13 +196,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             const CircularProgressIndicator(color: AppTheme.emerald),
                             const SizedBox(height: 16),
                             Text(
-                              'Fetching live packages from RevenueCat...',
+                              'Loading prices...',
                               style: TextStyle(fontSize: 13, color: fg3),
                             ),
                           ],
                         ),
                       ),
-                    ] else if (packages.isEmpty) ...[
+                    ] else if (products.isEmpty) ...[
                       // Empty / Pending Configuration State
                       Container(
                         padding: const EdgeInsets.all(20),
@@ -235,12 +216,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             const Icon(Iconsax.info_circle, size: 36, color: Colors.amber),
                             const SizedBox(height: 12),
                             Text(
-                              'Connecting to RevenueCat Catalog',
+                              'Prices are not available right now',
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Packages are propagating from RevenueCat Dashboard. Tap refresh or preview the native paywall below.',
+                              rc.lastErrorMessage ?? 'Prices are not available right now. Please try again in a little while.',
                               textAlign: TextAlign.center,
                               style: TextStyle(fontSize: 12, color: fg2, height: 1.4),
                             ),
@@ -251,20 +232,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                                 ElevatedButton.icon(
                                   onPressed: () => rc.fetchOfferings(),
                                   icon: const Icon(Icons.refresh, size: 16),
-                                  label: const Text('Refresh Offerings'),
+                                  label: const Text('Try again'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppTheme.emerald,
                                     foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                OutlinedButton.icon(
-                                  onPressed: () => rc.presentPaywall(),
-                                  icon: const Icon(Icons.launch, size: 16),
-                                  label: const Text('Native Paywall'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: fg,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
                                 ),
@@ -275,9 +246,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       ),
                     ] else ...[
                       // Render Live Dynamic Packages
-                      for (int i = 0; i < packages.length; i++) ...[
+                      for (int i = 0; i < products.length; i++) ...[
                         _buildDynamicPackageCard(
-                          package: packages[i],
+                          product: products[i],
                           isSelected: _selectedIndex == i,
                           onTap: () {
                             setState(() {
@@ -289,7 +260,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                           fg: fg,
                           fg3: fg3,
                         ),
-                        if (i < packages.length - 1) const SizedBox(height: 10),
+                        if (i < products.length - 1) const SizedBox(height: 10),
                       ],
                     ],
 
@@ -305,43 +276,78 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       ),
                       child: Column(
                         children: [
-                          _buildFeatureRow('Lifetime Validity: Minutes yours forever with no expiry', fg),
+                          _buildFeatureRow('All 70+ languages and studio voices included', fg),
                           const SizedBox(height: 8),
-                          _buildFeatureRow('Sub-300ms Ultra-Low Latency: Real-time synchronized dubbing', fg),
+                          _buildFeatureRow('Works with YouTube, Netflix and other apps on your phone', fg),
                           const SizedBox(height: 8),
-                          _buildFeatureRow('SyncDub Neural Pipeline: All 70+ languages & studio voices included', fg),
-                          const SizedBox(height: 8),
-                          _buildFeatureRow('Universal Support: Works across YouTube, Netflix, & Phone Apps', fg),
-                          const SizedBox(height: 8),
-                          _buildFeatureRow('Zero Commitments: Strictly one-time purchase with no auto-renewal', fg),
+                          _buildFeatureRow('One-time purchase, no subscription, no auto-renewal', fg),
                         ],
                       ),
                     ),
                     const SizedBox(height: 18),
 
+                    // Payment received by Google Play, waiting for the server (webhook) to add the minutes
+                    if (state.hasPendingPurchaseCredit) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.emeraldDim,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.emerald),
+                        ),
+                        child: Row(
+                          children: [
+                            if (state.isAwaitingCredit)
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.emerald),
+                              )
+                            else
+                              const Icon(Iconsax.tick_circle, size: 16, color: AppTheme.emerald),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                state.isAwaitingCredit
+                                    ? 'Confirming your payment... your minutes will be added as soon as it is confirmed.'
+                                    : 'Payment received. Your minutes will be added automatically once it is confirmed.',
+                                style: TextStyle(fontSize: 12, color: fg, height: 1.35),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
                     // Dynamic CTA Button
-                    if (selectedPkg != null) ...[
+                    if (selectedProduct != null) ...[
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: isLoading
+                          onPressed: (isLoading || state.isAwaitingCredit)
                               ? null
                               : () async {
                                   state.triggerHaptic();
-                                  final success = await state.purchaseRevenueCatPackage(selectedPkg);
-                                  if (context.mounted && success) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                           'Payment successful! Your minutes are being added to your account.',
-                                         ),
-                                        backgroundColor: AppTheme.emerald,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                    );
-                                    state.goScreen(3);
+                                  final accepted = await state.purchaseStoreProduct(selectedProduct);
+                                  // No "minutes added" message and no redirect here: Google Play accepting the
+                                  // payment is NOT the credit. The server adds the minutes after the RevenueCat
+                                  // webhook; only then does the app announce it and return Home.
+                                  if (!accepted && context.mounted) {
+                                    final err = state.activeError;
+                                    if (err != null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(err.reason),
+                                          backgroundColor: Colors.blueGrey,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                      );
+                                      state.clearActiveError();
+                                    }
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
@@ -352,14 +358,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             ),
                             elevation: 0,
                           ),
-                          child: isLoading
+                          child: (isLoading || state.isAwaitingCredit)
                               ? const SizedBox(
                                   width: 22,
                                   height: 22,
                                   child: CircularProgressIndicator(strokeWidth: 2.5),
                                 )
                               : Text(
-                                  'Get ${_cleanTitle(selectedPkg.storeProduct.title)} · ${selectedPkg.storeProduct.priceString}',
+                                  'Get ${_cleanTitle(selectedProduct.title)} · ${_cleanPrice(selectedProduct.priceString)}',
                                   style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w700,
@@ -370,34 +376,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ],
 
                     const SizedBox(height: 12),
-
-                    // Additional Options: Customer Center & Native Paywall triggers
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () => rc.presentCustomerCenter(),
-                          icon: const Icon(Icons.manage_accounts, size: 16, color: AppTheme.emerald),
-                          label: const Text(
-                            'Customer Center',
-                            style: TextStyle(fontSize: 12, color: AppTheme.emerald, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        TextButton.icon(
-                          onPressed: () => rc.presentPaywall(),
-                          icon: const Icon(Icons.fullscreen, size: 16, color: AppTheme.emerald),
-                          label: const Text(
-                            'Full Paywall View',
-                            style: TextStyle(fontSize: 12, color: AppTheme.emerald, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 6),
                     Text(
-                      'Secured by Google Play Billing via RevenueCat · Minutes are added right after payment',
+                      'Secure payment through Google Play',
                       style: TextStyle(
                         fontSize: 11,
                         color: fg3,
@@ -414,9 +394,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
     );
   }
 
-  /// Builds a dynamic package card with live data from RevenueCat
+  /// Builds a minute-pack card with live data from Google Play / RevenueCat
   Widget _buildDynamicPackageCard({
-    required Package package,
+    required StoreProduct product,
     required bool isSelected,
     required VoidCallback onTap,
     required Color sf,
@@ -424,14 +404,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
     required Color fg,
     required Color fg3,
   }) {
-    final storeProduct = package.storeProduct;
-    final title = _cleanTitle(storeProduct.title);
-    final price = storeProduct.priceString;
-    final desc = storeProduct.description.isNotEmpty
-        ? storeProduct.description
-        : 'One-time minute recharge pack for live AI dubbing';
-    final minutes = RevenueCatService.parseMinutesFromPackage(package);
-    final badge = _getBadgeForPackage(package, minutes);
+    final title = _cleanTitle(product.title);
+    final price = _cleanPrice(product.priceString);
+    final minutes = RevenueCatService.parseMinutesFromProduct(product);
+    final badge = _getBadgeForProduct(product, minutes);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -507,14 +483,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  desc,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: fg3,
-                  ),
-                ),
               ],
             ),
           ),
@@ -544,14 +512,23 @@ class _PaywallScreenState extends State<PaywallScreen> {
     );
   }
 
-  /// Removes Google Play "(AppName)" suffix if present in product title
+  /// Removes every "(...)" / "[...]" segment from the Google Play title (app name, extra price, notes)
   String _cleanTitle(String rawTitle) {
-    return rawTitle.replaceAll(RegExp(r'\s*\([^)]*\)$'), '').trim();
+    return rawTitle
+        .replaceAll(RegExp(r'\s*[\(\[][^\)\]]*[\)\]]'), '')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .trim();
+  }
+
+  /// Shows ONLY the real Google Play price: any bracketed second price/note is dropped
+  String _cleanPrice(String rawPrice) {
+    final cleaned = rawPrice.replaceAll(RegExp(r'\s*[\(\[][^\)\]]*[\)\]]'), '').trim();
+    return cleaned.isEmpty ? rawPrice : cleaned;
   }
 
   /// Assign badges dynamically based on minutes or identifier
-  String? _getBadgeForPackage(Package package, int minutes) {
-    final id = package.identifier.toLowerCase();
+  String? _getBadgeForProduct(StoreProduct product, int minutes) {
+    final id = product.identifier.toLowerCase();
     if (minutes == 300 || id.contains('pro')) {
       return 'MOST POPULAR';
     }

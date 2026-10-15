@@ -373,7 +373,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         InkWell(
                           onTap: () {
                             state.triggerHaptic();
-                            state.goScreen(6); // Open Paywall/Subscription
+                            state.goScreen(6); // Open the minute packs screen
                           },
                           child: const Text(
                             '+ Add Minutes',
@@ -385,56 +385,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // 4. Subscription & Plans Section
-              Text(
-                'SUBSCRIPTION & BILLING',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: fg3,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: sf,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: bd),
-                ),
-                child: Column(
-                  children: [
-                    _buildSettingsTile(
-                      icon: Iconsax.crown,
-                      iconColor: const Color(0xFFF59E0B),
-                      title: 'Manage Subscription',
-                      subtitle: state.isCreditsLoaded
-                          ? '${state.creditsRemaining.toStringAsFixed(0)} live minutes available'
-                          : 'Syncing subscription quota...',
-                      trailing: Icon(Iconsax.arrow_right_3, size: 16, color: fg3),
-                      onTap: () {
-                        state.triggerHaptic();
-                        state.goScreen(6);
-                      },
-                    ),
-                    Divider(height: 1, color: bd),
-                    _buildSettingsTile(
-                      icon: Iconsax.card,
-                      iconColor: const Color(0xFF6366F1),
-                      title: 'View All Plans & Add-ons',
-                      subtitle: 'Explore unlimited real-time translation tiers',
-                      trailing: Icon(Iconsax.arrow_right_3, size: 16, color: fg3),
-                      onTap: () {
-                        state.triggerHaptic();
-                        state.goScreen(6);
-                      },
                     ),
                   ],
                 ),
@@ -472,7 +422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'SyncDub AI operates on a strict zero-retention ephemeral privacy architecture.\n\n'
                         '1. Audio Processing: Your microphone and device audio are processed strictly in-memory over an encrypted TLS WebSocket stream to generate real-time dubbing. Once translated, audio buffers are instantly cleared from RAM.\n\n'
                         '2. Zero Audio Recordings: SyncDub AI never records, saves, archives, or analyzes your voice for AI training. No audio files are ever stored on any server.\n\n'
-                        '3. Account Data: Only your email and chosen subscription tier are retained to manage account authentication and quota.',
+                        '3. Account Data: Only your email and your minute balance are retained to manage account authentication and quota.',
                       ),
                     ),
                     Divider(height: 1, color: bd),
@@ -480,7 +430,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Iconsax.document_text,
                       iconColor: const Color(0xFF0284C7),
                       title: 'Terms of Service',
-                      subtitle: 'Usage guidelines and subscription agreements',
+                      subtitle: 'Usage guidelines and purchase terms',
                       trailing: Icon(Iconsax.arrow_right_3, size: 16, color: fg3),
                       onTap: () => _showLegalDialog(
                         'Terms of Service',

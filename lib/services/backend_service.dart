@@ -90,13 +90,18 @@ class SyncDubBackendService {
   /// Resume live translation stream
   /// Matching Chrome extension: resumes audio chunk streaming so SyncDub AI Auto-VAD detects speech onset
   /// [guard]=true for hard boundaries (manual resume / seek): flush + drop stale output.
-  /// [guard]=false for silence auto-resume: nothing stale exists, so never drop the first translated syllables.
+  /// [guard]=false for auto-resume: keeps the queue, but still drops engine output arriving in the first second.
   void resumeLiveStream({bool guard = true}) {
     _isPaused = false;
     _isManualPaused = false;
     if (guard) {
       suppressBoundaryOutput('resuming live dubbing');
       AudioPipelineService().flushPlaybackQueue();
+    } else {
+      // Auto-resume: the engine may still be finishing the translation of audio sent BEFORE the pause, and
+      // that stale speech would arrive right now. Real translation of the resumed speech cannot arrive within
+      // the first second (model latency), so everything inside this window is stale and is dropped.
+      suppressBoundaryOutput('auto-resume: drop stale pre-pause output', durationMs: 1000);
     }
     debugPrint('[BackendService] Live stream RESUMED (audio streaming active, boundary guard engaged)');
   }
@@ -204,6 +209,7 @@ class SyncDubBackendService {
   }
 
   bool _setupAckReceived = false;
+  DateTime? _lastGoAwayAt;
   bool get isSetupComplete => _setupAckReceived;
 
   // ---- First-token timing (printed once per session as one "[Latency]" log line) ----
@@ -277,6 +283,9 @@ class SyncDubBackendService {
     required void Function(int latencyMs) onLatencyUpdate,
     required void Function(String status) onStatusChange,
     required void Function(String errorReason) onDisconnected,
+    // Called instead of onDisconnected when Gemini simply ends its ~10 minute connection. The caller
+    // reconnects at once; native capture is left running so no permission dialog is needed.
+    void Function()? onRoutineReconnect,
   }) async {
     await stopLiveDubbingSession(preserveNativeCapture: preserveNativeCapture);
     final gen = ++_sessionGeneration;
@@ -403,6 +412,12 @@ class SyncDubBackendService {
                 debugPrint('[BackendService] Server close diagnostics captured: $_lastServerReportReason');
               }
 
+              // Gemini announces the end of its ~10 minute connection a little before it closes it.
+              if (parsed.containsKey('goAway')) {
+                _lastGoAwayAt = DateTime.now();
+                debugPrint('[BackendService] Gemini GoAway received (connection ends soon): ${parsed['goAway']}');
+              }
+
               // Credits Update - update accounting only; do not overwrite live/paused status
               if (parsed['action'] == 'creditsUpdate') {
                 final credits = (parsed['credits'] as num?)?.toDouble();
@@ -512,9 +527,34 @@ class SyncDubBackendService {
           final code = channel?.closeCode;
           final reason = channel?.closeReason;
           debugPrint('[BackendService] WS stream closed (code=$code, reason=$reason, lastReport=$_lastServerReportReason)');
+          final wasLive = _setupAckReceived;
           _isConnected = false;
           _setupAckReceived = false;
           _wsChannel = null;
+
+          // Gemini closes every Live connection after about 10 minutes (the proxy reports it as
+          // 1011 "Gemini disconnected"). That is routine, not a failure: keep the native capture
+          // running and let the caller reconnect immediately. Repeated quick closes are still stopped
+          // (and shown to the user) by the caller's reconnect limiter.
+          final closeText = reason ?? '';
+          final upstreamCode = RegExp(r'Code (\d+)').firstMatch(closeText)?.group(1);
+          // Gemini sends a GoAway and then closes with 1008 / 1011 depending on the moment: after a GoAway
+          // any upstream close is the session limit. Without a GoAway only 1007 (invalid request) is a real error.
+          final goAwayAt = _lastGoAwayAt;
+          final afterGoAway = goAwayAt != null &&
+              DateTime.now().difference(goAwayAt) < const Duration(minutes: 2);
+          final isRoutineUpstreamClose = wasLive &&
+              onRoutineReconnect != null &&
+              code == 1011 &&
+              closeText.startsWith('Gemini disconnected') &&
+              (afterGoAway || upstreamCode != '1007');
+          if (isRoutineUpstreamClose) {
+            debugPrint('[BackendService] Gemini ended its connection (routine ~10 min limit): reconnecting now');
+            unawaited(AudioPipelineService().stopPlayback());
+            onRoutineReconnect();
+            return;
+          }
+
           unawaited(AudioPipelineService().stopMicCapture());
           unawaited(AudioPipelineService().stopPlayback());
 
@@ -651,6 +691,7 @@ class SyncDubBackendService {
     required void Function(int latencyMs) onLatencyUpdate,
     required void Function(String status) onStatusChange,
     required void Function(String errorReason) onDisconnected,
+    void Function()? onRoutineReconnect,
   }) async {
     debugPrint('[BackendService] Seamlessly switching target language to: $newTargetLanguageCode');
     final gen = ++_sessionGeneration;
@@ -677,6 +718,7 @@ class SyncDubBackendService {
       onLatencyUpdate: onLatencyUpdate,
       onStatusChange: onStatusChange,
       onDisconnected: onDisconnected,
+      onRoutineReconnect: onRoutineReconnect,
     );
   }
 

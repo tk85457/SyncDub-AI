@@ -349,8 +349,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // 5. Subscription Section
-                _buildSectionHeader('Subscription & Real-Time Balance', fg3),
+                // 5. Minutes balance
+                _buildSectionHeader('Minutes Balance', fg3),
                 Container(
                   decoration: BoxDecoration(
                     color: sf,
@@ -365,7 +365,7 @@ class SettingsScreen extends StatelessWidget {
                     sub: state.isCreditsLoaded
                         ? '${state.creditsRemaining.toStringAsFixed(0)} minutes available for real-time translation'
                         : 'Loading translation quota...',
-                    val: 'Upgrade',
+                    val: 'Add',
                     valColor: AppTheme.amber,
                     hasArrow: true,
                     fg: fg,

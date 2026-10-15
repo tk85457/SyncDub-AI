@@ -1,15 +1,24 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/translation_state.dart';
 import 'screens/main_shell.dart';
+import 'services/app_update_service.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_error_widget.dart';
+import 'widgets/update_gate.dart';
 
 void main() async {
   // 1. Ensure Flutter bindings are safely initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Release builds print nothing: debugPrint still writes to logcat in release, where any app with log access
+  // (adb, bug-report tools) could read user ids, purchase states and error details.
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
 
   // 2. Install Global Flutter Framework Error Handler
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -44,6 +53,14 @@ void main() async {
     isAuthenticated = AuthService().isAuthenticated;
   } catch (e) {
     debugPrint('[SyncDub Startup] AuthService init error: $e');
+  }
+
+  // Mandatory-update check (needs Supabase initialised above). Applies the cached requirement
+  // instantly, then refreshes from the server (3s cap) so the first frame is already gated.
+  try {
+    await AppUpdateService.instance.check();
+  } catch (e) {
+    debugPrint('[SyncDub Startup] AppUpdate check error: $e');
   }
 
   runApp(SyncDubApp(
@@ -116,6 +133,8 @@ class _SyncDubAppState extends State<SyncDubApp> {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+          // Wraps the whole Navigator: no screen, route or dialog can sit above the update gate.
+          builder: (context, child) => UpdateGate(child: child ?? const SizedBox.shrink()),
           home: MainShell(state: _translationState),
         );
       },

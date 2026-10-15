@@ -46,6 +46,23 @@ class AppError {
 
     final rawStr = error.toString().toLowerCase();
 
+    // Translation engine ended the live session (GoAway / policy close 1008 / upstream 1011).
+    // The app reconnects by itself; if that still fails, say so in plain words instead of codes.
+    if (error is! AuthException &&
+        error is! PostgrestException &&
+        (rawStr.contains('gemini disconnected') ||
+            rawStr.contains('code 1008') ||
+            rawStr.contains('code 1011') ||
+            rawStr.contains('gemini api error'))) {
+      return AppError(
+        title: 'Live session ended',
+        reason:
+            'The translation engine closed the session. Tap Retry to start again; your minutes are not affected.',
+        recoveryAction: 'Retry',
+        type: AppErrorType.network,
+      );
+    }
+
     // 1. Google Auth & Supabase Auth Exceptions
     if (error is AuthException) {
       final msg = error.message.toLowerCase();
@@ -106,7 +123,7 @@ class AppError {
       return AppError(
         title: 'Account Sync Interrupted',
         reason:
-            'Could not synchronize your translation balance. Cached balance is active.',
+            'Could not update your minutes balance right now. It will refresh automatically.',
         recoveryAction: 'Syncing automatically in background',
         type: AppErrorType.database,
       );
@@ -163,9 +180,9 @@ class AppError {
     // 4. Missing Plugin Exception (e.g. In test or desktop environment)
     if (error is MissingPluginException) {
       return AppError(
-        title: 'Hardware Feature Simulating',
+        title: 'Feature Unavailable',
         reason:
-            'The requested hardware service is using software emulation on this device.',
+            'This feature is not available on this device.',
         recoveryAction: 'Continue normally',
         type: AppErrorType.general,
       );
@@ -328,9 +345,9 @@ class AppError {
         rawStr.contains('jsondecode') ||
         rawStr.contains('unexpected character')) {
       return AppError(
-        title: 'Data Format Notice',
+        title: 'Something Went Wrong',
         reason:
-            'Received an unexpected response format from the server. Safe fallback applied.',
+            'We received an unexpected response. Please try again.',
         recoveryAction: 'Please retry the session',
         type: AppErrorType.general,
       );

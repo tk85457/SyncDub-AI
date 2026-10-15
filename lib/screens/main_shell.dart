@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../models/translation_state.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_error_handler.dart';
+import '../widgets/app_error_widget.dart';
 import 'connecting_screen.dart';
 import 'history_screen.dart';
 import 'home_screen.dart';
@@ -27,14 +30,62 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
+  /// The last error already shown, so one error is never shown twice.
+  AppError? _lastShownError;
+
+  /// Home-screen errors appear as a floating pill snackbar (like YouTube / Netflix) instead of a
+  /// card inside the layout, so the connect button and the rest of the screen never move.
+  void _surfaceHomeError(TranslationState state) {
+    final error = state.activeError;
+    if (error == null || identical(error, _lastShownError)) return;
+    if (!state.isAuthenticated || state.currentScreen != 3) return;
+    _lastShownError = error;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showAppErrorSnackBar(
+        context,
+        error,
+        bottomOffset: 84, // sits above the bottom navigation bar
+        onRetry: () {
+          if (error.type == AppErrorType.microphone) {
+            state.requestMicPermission();
+          } else {
+            state.retryConnection();
+          }
+        },
+      );
+      state.clearActiveError();
+    });
+  }
+
+  StreamSubscription<double>? _creditSub;
+
+  /// Announces added minutes ONLY when the server balance really increased (webhook processed).
+  void _onCreditAdded(double added) {
+    if (!mounted) return;
+    final txt = added == added.roundToDouble() ? added.toStringAsFixed(0) : added.toStringAsFixed(1);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$txt minutes added to your account'),
+        backgroundColor: AppTheme.emerald,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _creditSub = widget.state.creditedEvents.listen(_onCreditAdded);
   }
 
   @override
   void dispose() {
+    _creditSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -123,6 +174,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         final isDark = state.isDarkMode;
         final bg = AppTheme.bg(isDark);
         final bd = AppTheme.border(isDark);
+        _surfaceHomeError(state);
 
         Widget currentScreen;
         // BINA LOGIN KE USER APP NA KHOL PAAYE: Strict Authentication Enforcement

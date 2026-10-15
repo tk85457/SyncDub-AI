@@ -922,15 +922,20 @@ class MainActivity : FlutterActivity() {
                         // Adaptive catch-up (same table as Chrome extension JitterBuffer.js); 1.0x in normal operation.
                         val remainingQueuedBytes = queuedBytesCount.get().toInt()
                         val queueLeadMs = remainingQueuedBytes / bytesPerMs
+                        // Hysteresis: speed goes up in a few coarse steps and only returns to 1.0x once the backlog is
+                        // really gone. Every PlaybackParams change makes the mixer re-configure its time-stretcher
+                        // (audible glitch, extra CPU on low-end phones), so the old 5 fine steps that flipped back and
+                        // forth around each threshold during long continuous speech were a stutter source.
                         val targetSpeed = when {
-                            queueLeadMs <= 800 -> 1.0f
-                            queueLeadMs <= 1800 -> 1.03f
-                            queueLeadMs <= 3000 -> 1.06f
-                            queueLeadMs <= 4500 -> 1.12f
-                            else -> 1.18f
+                            queueLeadMs > 4200 -> 1.15f
+                            queueLeadMs > 2800 -> 1.10f
+                            queueLeadMs > 1600 -> 1.05f
+                            queueLeadMs < 400 -> 1.0f
+                            else -> currentPlaybackSpeed
                         }
 
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Math.abs(currentPlaybackSpeed - targetSpeed) >= 0.02f) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Math.abs(currentPlaybackSpeed - targetSpeed) >= 0.04f) {
+                            android.util.Log.i("MainActivity", "Dub catch-up speed $currentPlaybackSpeed -> $targetSpeed (lead=${queueLeadMs}ms)")
                             synchronized(audioTrackLock) {
                                 try {
                                     val params = audioTrack?.playbackParams
@@ -1345,13 +1350,24 @@ class MainActivity : FlutterActivity() {
             val bytesPerMs = Math.max((sampleRate * 2) / 1000, 48)
             // CHROME EXTENSION PARITY: 6-Second Ceiling (DEFAULT_MAX_QUEUE_LEAD_SEC = 6.0s)
             // Headroom allows natural sentence bursts while preventing multi-second delay buildup
-            val maxBacklogBytes = 6000 * bytesPerMs
+            // Long continuous speech makes the dub fall behind the video minute by minute. The speed table in the
+            // playback worker absorbs most of it; only when the lead passes the ceiling do we resync - ONCE, in a
+            // single larger cut down to a short lead (dropping oldest whole chunks), then fade the next chunk in.
+            // The old code dropped one oldest chunk for every incoming chunk, i.e. a micro-skip every ~100ms for
+            // as long as the backlog stayed above the ceiling = the stutter after 7-8 minutes of nonstop speech.
+            val maxBacklogBytes = 5000 * bytesPerMs
+            val resyncTargetBytes = 1200 * bytesPerMs
             var totalQueuedBytes = queuedBytesCount.get().toInt()
-            // Trim excessive backlog (> 3000ms) immediately to retain real-time synchronicity
-            while (totalQueuedBytes > maxBacklogBytes) {
-                val dropped = playbackQueue.poll() ?: break
-                queuedBytesCount.addAndGet(-dropped.size.toLong())
-                totalQueuedBytes -= dropped.size
+            if (totalQueuedBytes > maxBacklogBytes) {
+                var droppedBytes = 0L
+                while (totalQueuedBytes > resyncTargetBytes) {
+                    val dropped = playbackQueue.poll() ?: break
+                    queuedBytesCount.addAndGet(-dropped.size.toLong())
+                    totalQueuedBytes -= dropped.size
+                    droppedBytes += dropped.size
+                }
+                isColdRamping = true // next chunk fades in so the splice does not click
+                android.util.Log.w("MainActivity", "Dub resync: dropped ${droppedBytes / bytesPerMs}ms of stale audio, lead now ${totalQueuedBytes / bytesPerMs}ms")
             }
             playbackQueue.offer(bytes)
             queuedBytesCount.addAndGet(bytes.size.toLong())

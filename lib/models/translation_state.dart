@@ -387,6 +387,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
               SharedPreferences.getInstance().then((p) => p.setDouble('syncdub_cached_user_credits', mins));
             }
             _setPlan(row['plan']?.toString());
+            _checkCreditArrived();
             notifyListeners();
           }
         },
@@ -406,6 +407,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
       if (mins != null) {
         _creditsRemaining = mins;
         await prefs.setDouble('syncdub_cached_user_credits', mins);
+        _checkCreditArrived();
       }
       notifyListeners();
     } else {
@@ -472,6 +474,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     _hasCompletedOnboarding = prefs.getBool('hasCompletedOnboarding') ?? false;
+    _creditBaseline = prefs.getDouble('pending_credit_baseline');
 
     final savedCode = prefs.getString('targetLangCode');
     if (savedCode != null) {
@@ -565,6 +568,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (_currentScreen != idx) {
       _screenStack.add(_currentScreen);
+      if (_screenStack.length > 30) _screenStack.removeAt(0); // bounded history
       _currentScreen = idx;
       notifyListeners();
     }
@@ -643,6 +647,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
     _creditPollTimer?.cancel();
     _creditPollTimer = null;
     _isAwaitingCredit = false;
+    _clearPendingCredit();
     _archiveSessionIfActive();
     _isTranslating = false;
     _isConnecting = false;
@@ -739,6 +744,43 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   bool _startInFlight = false;
+
+  final List<DateTime> _routineReconnects = [];
+
+  /// Gemini ends every Live connection after about 10 minutes (it sends a GoAway first). That is
+  /// routine, not a failure: reconnect at once with native capture kept alive, so the user sees a
+  /// short "Reconnecting…" instead of an error and never has to tap Start again.
+  void _handleRoutineReconnect() {
+    if (!_isTranslating) return; // the user already stopped the session
+    final now = DateTime.now();
+    _routineReconnects.removeWhere((t) => now.difference(t) > const Duration(minutes: 2));
+    if (_routineReconnects.length >= 3) {
+      // Reconnecting keeps ending within moments (not the routine 10 minute limit): stop and tell the user.
+      debugPrint('[TranslationState] Auto-reconnect gave up after repeated quick disconnects');
+      _routineReconnects.clear();
+      _archiveSessionIfActive();
+      _isConnecting = false;
+      _isTranslating = false;
+      _isPaused = false;
+      _isAutoPaused = false;
+      _isSwitchingLanguage = false;
+      _sessionTimer?.cancel();
+      _sessionTimer = null;
+      _silenceDetectionTimer?.cancel();
+      _silenceDetectionTimer = null;
+      _statusMessage = 'Ready to Dub';
+      AudioPipelineService().stopPlayback();
+      unawaited(AudioPipelineService().stopMicCapture());
+      unawaited(SyncDubBackendService().stopLiveDubbingSession());
+      FloatingOverlayManager.hideOverlay();
+      _activeError = AppErrorHandler.sanitize('Connection closed', context: 'Live Dubbing');
+      notifyListeners();
+      return;
+    }
+    _routineReconnects.add(now);
+    debugPrint('[TranslationState] Routine Gemini connection end: reconnecting (${_routineReconnects.length}/3 in 2 min)');
+    unawaited(_switchLanguageInActiveSession(_targetLanguage, _targetLanguage, statusText: 'Reconnecting…'));
+  }
 
   Future<void> _startLiveDubbing() async {
       // 1. Quota validation
@@ -860,6 +902,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
             }
             notifyListeners();
           },
+          onRoutineReconnect: _handleRoutineReconnect,
           onDisconnected: (reason) {
             debugPrint('[TranslationState] Live session disconnected: $reason');
             _archiveSessionIfActive();
@@ -1320,10 +1363,10 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _switchLanguageInActiveSession(SyncDubLanguage newLang, SyncDubLanguage oldLang) async {
+  Future<void> _switchLanguageInActiveSession(SyncDubLanguage newLang, SyncDubLanguage oldLang, {String? statusText}) async {
     _isSwitchingLanguage = true;
     _isConnecting = true;
-    _statusMessage = 'Switching to ${newLang.name}…';
+    _statusMessage = statusText ?? 'Switching to ${newLang.name}…';
     notifyListeners();
 
     try {
@@ -1375,6 +1418,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
           }
           notifyListeners();
         },
+        onRoutineReconnect: _handleRoutineReconnect,
         onDisconnected: (reason) {
           debugPrint('[TranslationState] Live session disconnected: $reason');
           _archiveSessionIfActive();
@@ -1475,13 +1519,57 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
   bool get isAwaitingCredit => _isAwaitingCredit;
   Timer? _creditPollTimer;
 
-  /// Starts a RevenueCat purchase for the selected package.
+  /// Balance at the moment a payment was accepted by Google Play and not yet credited by the server.
+  /// Persisted, so a webhook that lands while the app is closed is still reported correctly.
+  /// Non-null = "a paid purchase is waiting for its webhook credit".
+  double? _creditBaseline;
+  bool get hasPendingPurchaseCredit => _creditBaseline != null;
+
+  /// Fires ONLY when the server balance has really increased after a purchase (webhook processed).
+  /// This is the single source of the "minutes added" message: nothing else may announce a credit.
+  final StreamController<double> _creditedEvents = StreamController<double>.broadcast();
+  Stream<double> get creditedEvents => _creditedEvents.stream;
+
+  void _markPendingCredit(double balanceBefore) {
+    final existing = _creditBaseline;
+    final base = existing == null ? balanceBefore : (existing < balanceBefore ? existing : balanceBefore);
+    _creditBaseline = base;
+    SharedPreferences.getInstance()
+        .then((p) => p.setDouble('pending_credit_baseline', base))
+        .catchError((_) => false);
+  }
+
+  void _clearPendingCredit() {
+    _creditBaseline = null;
+    SharedPreferences.getInstance().then((p) => p.remove('pending_credit_baseline')).catchError((_) => false);
+  }
+
+  /// Called after EVERY server balance read (realtime stream, profile sync, polling). If the balance
+  /// is now higher than it was when the payment was accepted, the webhook has credited it: announce
+  /// it once, and bring the user home if they are still on the paywall.
+  void _checkCreditArrived() {
+    final base = _creditBaseline;
+    final now = _creditsRemaining;
+    if (base == null || now == null) return;
+    if (now <= base + 0.0001) return;
+    final added = now - base;
+    _clearPendingCredit();
+    _creditPollTimer?.cancel();
+    _creditPollTimer = null;
+    _isAwaitingCredit = false;
+    if (_currentScreen == 6) goScreen(3);
+    if (!_creditedEvents.isClosed) _creditedEvents.add(added);
+    notifyListeners();
+  }
+
+  /// Starts a RevenueCat purchase for the selected minute pack.
   ///
   /// The app NEVER adds minutes itself. Flow: Google Play -> RevenueCat -> webhook -> server credits
   /// the profile (idempotent) -> the new balance reaches the app via realtime / polling below.
   /// Returns true when Google Play accepted the payment (minutes follow within seconds).
-  Future<bool> purchaseRevenueCatPackage(Package package) async {
+  Future<bool> purchaseStoreProduct(StoreProduct product) async {
     triggerHaptic();
+    _activeError = null;
 
     final userId = AuthService().user?.id;
     if (userId == null) {
@@ -1495,27 +1583,33 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
 
     final balanceBefore = _creditsRemaining ?? 0.0;
     final rc = RevenueCatService();
-    final success = await rc.purchasePackage(package, appUserId: userId);
+    final success = await rc.purchaseProduct(product, appUserId: userId);
     if (success) {
       _activeError = null;
       _awaitServerCredit(balanceBefore);
       return true;
     }
 
+    if (rc.lastPurchasePending) {
+      _awaitServerCredit(balanceBefore);
+    }
     if (rc.lastErrorMessage != null) {
-      _activeError = AppErrorHandler.sanitize(
-        rc.lastErrorMessage!,
-        context: 'RevenueCat Purchase',
+      _activeError = AppError(
+        title: 'Payment Notice',
+        reason: rc.lastErrorMessage!,
+        recoveryAction: 'Please try again',
+        type: AppErrorType.general,
       );
       notifyListeners();
     }
     return false;
   }
 
-  /// Polls the server until the purchased minutes show up (the realtime profile stream usually
-  /// delivers them first). Stops on success, sign-out, dispose, or after ~3 minutes. A late webhook
-  /// is still picked up by the realtime stream and by the profile sync on app resume.
+  /// Watches the server balance until the webhook has credited the purchase (the realtime profile
+  /// stream usually delivers it first). Polling stops on credit, sign-out, or after ~3 minutes; a later
+  /// webhook is still caught by the realtime stream / profile sync because the baseline is kept.
   void _awaitServerCredit(double balanceBefore) {
+    _markPendingCredit(balanceBefore);
     _creditPollTimer?.cancel();
     _isAwaitingCredit = true;
     notifyListeners();
@@ -1523,7 +1617,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
     var attempts = 0;
     var inFlight = false;
 
-    void finish() {
+    void stopAwaiting() {
       _creditPollTimer?.cancel();
       _creditPollTimer = null;
       _isAwaitingCredit = false;
@@ -1536,7 +1630,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
       attempts++;
       try {
         if (!AuthService().isAuthenticated) {
-          finish();
+          stopAwaiting();
           return;
         }
         final info = await SyncDubBackendService().fetchLiveUserPlan();
@@ -1545,10 +1639,8 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
           _creditsRemaining = info.minutesRemaining;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setDouble('syncdub_cached_user_credits', info.minutesRemaining);
-          if (info.minutesRemaining > balanceBefore + 0.0001) {
-            finish();
-            return;
-          }
+          _checkCreditArrived();
+          if (_creditBaseline == null) return; // credited: _checkCreditArrived already finished everything
           notifyListeners();
         }
       } catch (e) {
@@ -1558,9 +1650,49 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
       }
       if (attempts >= 60) {
         debugPrint('[TranslationState] Purchase credit not visible yet; realtime sync will deliver it.');
-        finish();
+        stopAwaiting();
       }
     });
+  }
+
+  /// Restores purchases through RevenueCat and reads the server balance back in real time.
+  ///
+  /// Like a purchase, a restore never credits minutes in the app: RevenueCat tells the server (webhook),
+  /// the server credits the profile (idempotent), and the new balance is read back here.
+  Future<({bool ok, String message})> restoreRevenueCatPurchases() async {
+    triggerHaptic();
+
+    final userId = AuthService().user?.id;
+    if (userId == null) {
+      return (ok: false, message: 'Please sign in to restore your purchases.');
+    }
+
+    final rc = RevenueCatService();
+    final balanceBefore = _creditsRemaining ?? 0.0;
+
+    if (!await rc.ensureLoggedIn(userId)) {
+      return (ok: false, message: 'Could not reach billing. Check your internet connection and try again.');
+    }
+
+    final info = await rc.restorePurchases();
+    if (info == null) {
+      return (ok: false, message: 'Restore failed. Check your internet connection and try again.');
+    }
+
+    // Read the latest balance from the server right away, then once more after a short wait in case
+    // the webhook for a restored purchase was still in flight.
+    await _syncProfile();
+    if ((_creditsRemaining ?? 0.0) <= balanceBefore + 0.0001) {
+      await Future.delayed(const Duration(seconds: 2));
+      await _syncProfile();
+    }
+
+    final balance = _creditsRemaining ?? 0.0;
+    final balanceText = '${balance.toStringAsFixed(balance == balance.roundToDouble() ? 0 : 1)} min';
+    if (balance > balanceBefore + 0.0001) {
+      return (ok: true, message: 'Purchases restored. Your balance is now $balanceText.');
+    }
+    return (ok: true, message: 'Restore complete. Nothing new to add. Your balance is $balanceText.');
   }
 
   Future<void> clearHistory() async {
@@ -1577,6 +1709,7 @@ class TranslationState extends ChangeNotifier with WidgetsBindingObserver {
     _sessionTimer?.cancel();
     _profileSubscription?.cancel();
     _creditPollTimer?.cancel();
+    _creditedEvents.close();
     super.dispose();
   }
 }
